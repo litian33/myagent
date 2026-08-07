@@ -45,7 +45,7 @@ def main() -> None:
     response = client.responses.create(
         model=model,
         instructions="You are MyAgent, a coding assistant.",
-        input="请告诉我当前目录有哪些文件",
+        input="请告诉我当前目录有哪些代码文件",
         tools=tools,
     )
 
