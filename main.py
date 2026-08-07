@@ -1,9 +1,10 @@
 import json
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -21,6 +22,76 @@ Use the available tools when you need information from the local environment.
 Do not guess file contents. Read files when their contents are needed.
 """
 
+MAX_SEARCH_RESULTS = 20
+MAX_SEARCH_FILE_BYTES = 1_000_000
+MAX_TOOL_OUTPUT_CHARS = 12_000
+
+SEARCH_EXCLUDED_DIRS = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+}
+class SearchMatch(TypedDict):
+    path: str
+    line: int
+    text: str
+
+def grep(
+    pattern: str,
+    path: str,
+) -> list[SearchMatch]:
+    root = Path(path)
+    regex = re.compile(pattern)
+
+    matches: list[SearchMatch] = []
+
+    if root.is_file():
+        candidates = [root]
+    else:
+        candidates = root.rglob("*")
+
+    for file_path in candidates:
+        if len(matches) >= MAX_SEARCH_RESULTS:
+            break
+
+        if not file_path.is_file():
+            continue
+
+        if any(
+            part in SEARCH_EXCLUDED_DIRS
+            for part in file_path.parts
+        ):
+            continue
+
+        try:
+            if file_path.stat().st_size > MAX_SEARCH_FILE_BYTES:
+                continue
+
+            with file_path.open(
+                "r",
+                encoding="utf-8",
+            ) as file:
+                for line_number, line in enumerate(file, start=1):
+                    if regex.search(line):
+                        matches.append(
+                            {
+                                "path": str(file_path),
+                                "line": line_number,
+                                "text": line.rstrip(),
+                            }
+                        )
+
+                        if len(matches) >= MAX_SEARCH_RESULTS:
+                            break
+
+        except (
+            OSError,
+            UnicodeError,
+        ):
+            continue
+
+    return matches
 
 def list_files(path: str) -> list[str]:
     directory = Path(path)
@@ -33,6 +104,24 @@ def read_file(path: str) -> str:
 
     return file_path.read_text(encoding="utf-8")
 
+
+def serialize_tool_result(result: Any) -> str:
+    serialized = json.dumps(
+        result,
+        ensure_ascii=False,
+    )
+
+    if len(serialized) <= MAX_TOOL_OUTPUT_CHARS:
+        return serialized
+
+    return json.dumps(
+        {
+            "truncated": True,
+            "original_chars": len(serialized),
+            "content": serialized[:MAX_TOOL_OUTPUT_CHARS],
+        },
+        ensure_ascii=False,
+    )
 
 @dataclass(frozen=True, slots=True)
 class Tool:
@@ -93,10 +182,7 @@ class ToolRegistry:
 
             result = tool.handler(**arguments)
 
-            return json.dumps(
-                result,
-                ensure_ascii=False,
-            )
+            return serialize_tool_result(result)
 
         except (
             json.JSONDecodeError,
@@ -156,12 +242,48 @@ READ_FILE_TOOL = Tool(
     handler=read_file,
 )
 
+GREP_TOOL = Tool(
+    schema={
+        "type": "function",
+        "name": "grep",
+        "description": (
+            "Search text files for a regular expression pattern. "
+            "Use this to locate code, symbols, configuration, or text "
+            "without reading every file."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": (
+                        "Regular expression pattern to search for."
+                    ),
+                },
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "File or directory path to search."
+                    ),
+                },
+            },
+            "required": [
+                "pattern",
+                "path",
+            ],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+    handler=grep,
+)
 
 def create_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
 
     registry.register(LIST_FILES_TOOL)
     registry.register(READ_FILE_TOOL)
+    registry.register(GREP_TOOL)
 
     return registry
 
@@ -185,9 +307,8 @@ def main() -> None:
         model=model,
         instructions=INSTRUCTIONS,
         input=(
-            "请分析当前项目里的 Python 代码是做什么的。"
-            "根据需要使用工具调查项目，"
-            "最后根据你实际看到的代码进行总结。"
+            "请找到 AgentRuntime 类并解释它。"
+            "如果项目里没有，请根据实际搜索结果回答，不要猜。"
         ),
         tools=registry.schemas(),
     )
