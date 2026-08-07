@@ -1,6 +1,9 @@
 import json
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -18,8 +21,100 @@ Use the available tools when you need information from the local environment.
 Do not guess file contents. Read files when their contents are needed.
 """
 
-TOOLS: list[FunctionToolParam] = [
-    {
+
+def list_files(path: str) -> list[str]:
+    directory = Path(path)
+
+    return [item.name for item in directory.iterdir()]
+
+
+def read_file(path: str) -> str:
+    file_path = Path(path)
+
+    return file_path.read_text(encoding="utf-8")
+
+
+@dataclass(frozen=True, slots=True)
+class Tool:
+    schema: FunctionToolParam
+    handler: Callable[..., Any]
+
+    @property
+    def name(self) -> str:
+        return self.schema["name"]
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._tools: dict[str, Tool] = {}
+
+    def register(self, tool: Tool) -> None:
+        if tool.name in self._tools:
+            raise ValueError(
+                f"Tool already registered: {tool.name}"
+            )
+
+        self._tools[tool.name] = tool
+
+    def get(self, name: str) -> Tool | None:
+        return self._tools.get(name)
+
+    def schemas(self) -> list[FunctionToolParam]:
+        return [
+            tool.schema
+            for tool in self._tools.values()
+        ]
+
+    def execute(
+        self,
+        tool_call: ResponseFunctionToolCall,
+    ) -> str:
+        tool = self.get(tool_call.name)
+
+        if tool is None:
+            return json.dumps(
+                {
+                    "error": f"Unknown tool: {tool_call.name}",
+                },
+                ensure_ascii=False,
+            )
+
+        try:
+            arguments = json.loads(tool_call.arguments)
+
+            if not isinstance(arguments, dict):
+                return json.dumps(
+                    {
+                        "error": "Tool arguments must be a JSON object.",
+                        "tool": tool_call.name,
+                    },
+                    ensure_ascii=False,
+                )
+
+            result = tool.handler(**arguments)
+
+            return json.dumps(
+                result,
+                ensure_ascii=False,
+            )
+
+        except (
+            json.JSONDecodeError,
+            TypeError,
+            OSError,
+            UnicodeError,
+        ) as exc:
+            return json.dumps(
+                {
+                    "error": str(exc),
+                    "tool": tool_call.name,
+                },
+                ensure_ascii=False,
+            )
+
+
+LIST_FILES_TOOL = Tool(
+    schema={
         "type": "function",
         "name": "list_files",
         "description": "List files and directories in a given directory.",
@@ -36,69 +131,40 @@ TOOLS: list[FunctionToolParam] = [
         },
         "strict": True,
     },
-    {
+    handler=list_files,
+)
+
+
+READ_FILE_TOOL = Tool(
+    schema={
         "type": "function",
         "name": "read_file",
-        "description": "Read the text contents of a file.",
+        "description": "Read the text content of a file.",
         "parameters": {
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "File path to read.",
+                    "description": "Path of the file to read.",
                 }
             },
             "required": ["path"],
             "additionalProperties": False,
         },
         "strict": True,
-    }
-]
+    },
+    handler=read_file,
+)
 
-def list_files(path: str) -> list[str]:
-    directory = Path(path)
 
-    return [item.name for item in directory.iterdir()]
+def create_tool_registry() -> ToolRegistry:
+    registry = ToolRegistry()
 
-def read_file(path: str) -> str:
-    file_path = Path(path)
+    registry.register(LIST_FILES_TOOL)
+    registry.register(READ_FILE_TOOL)
 
-    return file_path.read_text(encoding="utf-8")
+    return registry
 
-def execute_tool(tool_call: ResponseFunctionToolCall) -> str:
-    try:
-        if tool_call.name == "list_files":
-            return json.dumps(
-                list_files(
-                    path=json.loads(tool_call.arguments)["path"],
-                ),
-                ensure_ascii=False,
-            )
-        elif tool_call.name == "read_file":
-            return json.dumps(
-                read_file(
-                    path=json.loads(tool_call.arguments)["path"],
-                ),
-                ensure_ascii=False,
-            )
-        else:
-            return json.dumps(
-                {"error": f"Unknown tool: {tool_call.name}"},
-                ensure_ascii=False,
-            )
-    except (
-        json.JSONDecodeError,
-        KeyError,
-        OSError,
-        UnicodeError,
-    ) as exc:
-        return json.dumps(
-            {
-                "error": str(exc),
-                "tool": tool_call.name,
-            },
-            ensure_ascii=False,
-        )
 
 def main() -> None:
     load_dotenv()
@@ -108,35 +174,38 @@ def main() -> None:
         api_key=os.getenv("OPENAI_API_KEY"),
     )
 
-    model = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-
-    # input = (
-    #     "请分析当前项目里的 Python 代码是做什么的。"
-    #     "先了解项目目录，再根据需要读取相关文件，"
-    #     "最后根据你实际看到的代码进行总结。"
-    # )
-    input = (
-        "请阅读 agent.py，并告诉我 execute_tool 函数负责什么。"
+    model = os.getenv(
+        "OPENAI_MODEL",
+        "gpt-5.6-luna",
     )
+
+    registry = create_tool_registry()
+
     response = client.responses.create(
         model=model,
         instructions=INSTRUCTIONS,
-        input=input,
-        tools=TOOLS,
+        input=(
+            "请分析当前项目里的 Python 代码是做什么的。"
+            "根据需要使用工具调查项目，"
+            "最后根据你实际看到的代码进行总结。"
+        ),
+        tools=registry.schemas(),
     )
 
     step = 0
+
     while True:
         step += 1
+
         if step > MAX_STEPS:
             raise RuntimeError(
                 f"Agent exceeded maximum steps: {MAX_STEPS}"
             )
+
         print(f"\n[agent step {step}]")
 
         tool_calls: list[ResponseFunctionToolCall] = []
 
-        # 搜集需要调用工具的响应
         for item in response.output:
             if item.type == "function_call":
                 tool_calls.append(item)
@@ -154,7 +223,7 @@ def main() -> None:
                 f"{tool_call.name}({tool_call.arguments})"
             )
 
-            result = execute_tool(tool_call)
+            result = registry.execute(tool_call)
 
             print(f"[tool result] {result}")
 
@@ -166,13 +235,12 @@ def main() -> None:
                 }
             )
 
-        # 根据工具调用结果再次调用大模型获取下一步输出
         response = client.responses.create(
             model=model,
             instructions=INSTRUCTIONS,
-            tools=TOOLS,
+            tools=registry.schemas(),
             previous_response_id=response.id,
-            input=tool_outputs
+            input=tool_outputs,
         )
 
 
