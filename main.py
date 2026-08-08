@@ -6,6 +6,9 @@ from openai.types.responses import (
     ResponseInputParam,
 )
 
+from agent.compaction import (
+    ContextCompactor,
+)
 from agent.context import (
     ContextManager,
     TokenCounter,
@@ -115,13 +118,18 @@ def main() -> None:
         count_tokens=token_counter,
         max_input_tokens=max_input_tokens,
     )
-
+    compactor = ContextCompactor(
+        client=client,
+        model=model,
+        max_output_tokens=2048,
+    )
     agent = AgentRuntime(
         client=client,
         model=model,
         instructions=INSTRUCTIONS,
         tools=registry,
         context=context,
+        compactor=compactor,
         max_output_tokens=max_output_tokens,
         max_steps=10,
     )

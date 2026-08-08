@@ -4,6 +4,9 @@ from openai.types.responses import (
     ResponseInputParam,
 )
 
+from agent.compaction import (
+    ContextCompactor,
+)
 from agent.context import ContextManager
 from agent.state import AgentState
 from tools.registry import ToolRegistry
@@ -18,6 +21,7 @@ class AgentRuntime:
         instructions: str,
         tools: ToolRegistry,
         context: ContextManager,
+        compactor: ContextCompactor,
         max_output_tokens: int,
         max_steps: int = 10,
     ) -> None:
@@ -26,6 +30,7 @@ class AgentRuntime:
         self._instructions = instructions
         self._tools = tools
         self._context = context
+        self._compactor = compactor
         self._max_output_tokens = max_output_tokens
         self._max_steps = max_steps
 
@@ -43,7 +48,7 @@ class AgentRuntime:
         ):
             state.step = step
 
-            context = self._context.build(
+            context = self._build_context(
                 state
             )
 
@@ -53,13 +58,12 @@ class AgentRuntime:
 
             print(
                 "[context] "
-                f"tokens={context.input_tokens}, "
-                f"max_input_tokens={context.max_input_tokens}, "
+                f"tokens={context.input_tokens}/"
+                f"{context.max_input_tokens}, "
                 f"blocks="
-                f"{context.included_blocks}/"
-                f"{context.total_blocks}, "
-                f"dropped="
-                f"{context.dropped_blocks}"
+                f"{context.included_blocks}, "
+                f"compacted="
+                f"{context.compacted_blocks}"
             )
 
             response = (
@@ -125,3 +129,31 @@ class AgentRuntime:
             "Agent exceeded maximum steps: "
             f"{self._max_steps}"
         )
+
+    def _build_context(
+        self,
+        state: AgentState,
+    ):
+        while True:
+            context = self._context.build(
+                state
+            )
+
+            if (
+                context.pending_compaction_blocks
+                == 0
+            ):
+                return context
+
+            print(
+                "[compaction] "
+                f"blocks="
+                f"{context.pending_compaction_blocks}"
+            )
+
+            self._compactor.compact(
+                state,
+                block_count=(
+                    context.pending_compaction_blocks
+                ),
+            )

@@ -14,6 +14,12 @@ class HistoryBlock:
 
 
 @dataclass(slots=True)
+class CompactionState:
+    summary: str
+    compacted_blocks: int
+
+
+@dataclass(slots=True)
 class AgentState:
     task: str
 
@@ -22,6 +28,8 @@ class AgentState:
     history_blocks: list[HistoryBlock] = field(
         default_factory=list
     )
+
+    compaction: CompactionState | None = None
 
     step: int = 0
 
@@ -68,6 +76,74 @@ class AgentState:
         )
 
     @property
+    def compacted_block_count(self) -> int:
+        if self.compaction is None:
+            return 0
+
+        return self.compaction.compacted_blocks
+
+    @property
+    def active_history_blocks(
+        self,
+    ) -> list[HistoryBlock]:
+        return self.history_blocks[
+            self.compacted_block_count:
+        ]
+
+    def blocks_for_compaction(
+        self,
+        count: int,
+    ) -> list[HistoryBlock]:
+        if count <= 0:
+            raise ValueError(
+                "Compaction block count "
+                "must be positive"
+            )
+
+        start = self.compacted_block_count
+        end = start + count
+
+        if end > len(self.history_blocks):
+            raise ValueError(
+                "Compaction exceeds "
+                "available history blocks"
+            )
+
+        return self.history_blocks[
+            start:end
+        ]
+
+    def apply_compaction(
+        self,
+        *,
+        summary: str,
+        block_count: int,
+    ) -> None:
+        if not summary.strip():
+            raise ValueError(
+                "Compaction summary cannot "
+                "be empty"
+            )
+
+        compacted_blocks = (
+            self.compacted_block_count
+            + block_count
+        )
+
+        if compacted_blocks > len(
+            self.history_blocks
+        ):
+            raise ValueError(
+                "Compaction exceeds "
+                "history size"
+            )
+
+        self.compaction = CompactionState(
+            summary=summary,
+            compacted_blocks=compacted_blocks,
+        )
+
+    @property
     def history(self) -> ResponseInputParam:
         items: ResponseInputParam = [
             *self.initial_input
@@ -77,7 +153,3 @@ class AgentState:
             items.extend(block.items)
 
         return items
-
-    @property
-    def history_size(self) -> int:
-        return len(self.history)
