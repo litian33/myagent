@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from tools.base import Tool
+from tools.base import Tool,tool
 
 MAX_SEARCH_RESULTS = 20
 MAX_SEARCH_FILE_BYTES = 1_000_000
@@ -20,7 +20,11 @@ class SearchMatch(TypedDict):
     line: int
     text: str
 
-
+@tool(
+    description=(
+        "List files and directories in a given directory."
+    )
+)
 def list_files(path: str) -> list[str]:
     directory = Path(path)
 
@@ -29,7 +33,11 @@ def list_files(path: str) -> list[str]:
         for item in directory.iterdir()
     ]
 
-
+@tool(
+    description=(
+        "Read the text content of a file."
+    )
+)
 def read_file(path: str) -> str:
     file_path = Path(path)
 
@@ -37,7 +45,13 @@ def read_file(path: str) -> str:
         encoding="utf-8",
     )
 
-
+@tool(
+    description=(
+        "Search text files for a regular expression pattern. "
+        "Use this to locate code, symbols, configuration, or "
+        "text without reading every file."
+    )
+)
 def grep(
     pattern: str,
     path: str,
@@ -109,98 +123,8 @@ def grep(
 
     return matches
 
-
-LIST_FILES_TOOL = Tool(
-    schema={
-        "type": "function",
-        "name": "list_files",
-        "description": (
-            "List files and directories in a given directory."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": (
-                        "Directory path to list."
-                    ),
-                }
-            },
-            "required": ["path"],
-            "additionalProperties": False,
-        },
-        "strict": True,
-    },
-    handler=list_files,
-)
-
-
-READ_FILE_TOOL = Tool(
-    schema={
-        "type": "function",
-        "name": "read_file",
-        "description": (
-            "Read the text content of a file."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": (
-                        "Path of the file to read."
-                    ),
-                }
-            },
-            "required": ["path"],
-            "additionalProperties": False,
-        },
-        "strict": True,
-    },
-    handler=read_file,
-)
-
-
-GREP_TOOL = Tool(
-    schema={
-        "type": "function",
-        "name": "grep",
-        "description": (
-            "Search text files for a regular expression pattern. "
-            "Use this to locate code, symbols, configuration, or "
-            "text without reading every file."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": (
-                        "Regular expression pattern to search for."
-                    ),
-                },
-                "path": {
-                    "type": "string",
-                    "description": (
-                        "File or directory path to search."
-                    ),
-                },
-            },
-            "required": [
-                "pattern",
-                "path",
-            ],
-            "additionalProperties": False,
-        },
-        "strict": True,
-    },
-    handler=grep,
-)
-
-
 FILESYSTEM_TOOLS: tuple[Tool, ...] = (
-    LIST_FILES_TOOL,
-    READ_FILE_TOOL,
-    GREP_TOOL,
+    list_files,
+    read_file,
+    grep,
 )
