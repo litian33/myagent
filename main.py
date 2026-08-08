@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from agent.context import ContextManager
 from agent.runtime import AgentRuntime
 from tools.filesystem import FILESYSTEM_TOOLS
 from tools.registry import ToolRegistry
@@ -40,11 +41,16 @@ def main() -> None:
 
     registry = create_tool_registry()
 
+    context = ContextManager(
+        max_input_chars=15_000,
+    )
+
     agent = AgentRuntime(
         client=client,
         model=model,
         instructions=INSTRUCTIONS,
         tools=registry,
+        context=context,
         max_steps=10,
     )
 

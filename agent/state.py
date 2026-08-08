@@ -9,11 +9,20 @@ from openai.types.responses import (
 
 
 @dataclass(slots=True)
+class HistoryBlock:
+    items: ResponseInputParam
+
+
+@dataclass(slots=True)
 class AgentState:
     task: str
-    history: ResponseInputParam = field(
+
+    initial_input: ResponseInputParam
+
+    history_blocks: list[HistoryBlock] = field(
         default_factory=list
     )
+
     step: int = 0
 
     @classmethod
@@ -21,7 +30,7 @@ class AgentState:
         cls,
         task: str,
     ) -> "AgentState":
-        history: ResponseInputParam = [
+        initial_input: ResponseInputParam = [
             {
                 "role": "user",
                 "content": task,
@@ -30,14 +39,17 @@ class AgentState:
 
         return cls(
             task=task,
-            history=history,
+            initial_input=initial_input,
         )
 
-    def append_model_output(
+    def record_step(
         self,
-        output: list[ResponseOutputItem],
+        model_output: list[ResponseOutputItem],
+        tool_outputs: ResponseInputParam,
     ) -> None:
-        for item in output:
+        items: ResponseInputParam = []
+
+        for item in model_output:
             input_item = cast(
                 ResponseInputItemParam,
                 item.model_dump(
@@ -45,9 +57,26 @@ class AgentState:
                 ),
             )
 
-            self.history.append(
-                input_item
+            items.append(input_item)
+
+        items.extend(tool_outputs)
+
+        self.history_blocks.append(
+            HistoryBlock(
+                items=items,
             )
+        )
+
+    @property
+    def history(self) -> ResponseInputParam:
+        items: ResponseInputParam = [
+            *self.initial_input
+        ]
+
+        for block in self.history_blocks:
+            items.extend(block.items)
+
+        return items
 
     @property
     def history_size(self) -> int:

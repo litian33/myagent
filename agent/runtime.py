@@ -1,11 +1,10 @@
-import json
-
 from openai import OpenAI
 from openai.types.responses import (
     ResponseFunctionToolCall,
     ResponseInputParam,
 )
 
+from agent.context import ContextManager
 from agent.state import AgentState
 from tools.registry import ToolRegistry
 
@@ -18,12 +17,14 @@ class AgentRuntime:
         model: str,
         instructions: str,
         tools: ToolRegistry,
+        context: ContextManager,
         max_steps: int = 10,
     ) -> None:
         self._client = client
         self._model = model
         self._instructions = instructions
         self._tools = tools
+        self._context = context
         self._max_steps = max_steps
 
     def run(
@@ -40,32 +41,31 @@ class AgentRuntime:
         ):
             state.step = step
 
-            print(
-                f"\n[agent step {state.step}]"
-            )
-            print(
-                f"[history items] "
-                f"{state.history_size}"
+            context = self._context.build(
+                state
             )
 
             print(
-                json.dumps(
-                    state.history,
-                    ensure_ascii=False,
-                    indent=2,
-                )
+                f"\n[agent step {state.step}]"
             )
+
+            print(
+                "[context] "
+                f"chars={context.input_chars}, "
+                f"blocks="
+                f"{context.included_blocks}/"
+                f"{context.total_blocks}, "
+                f"dropped="
+                f"{context.dropped_blocks}"
+            )
+
             response = (
                 self._client.responses.create(
                     model=self._model,
                     instructions=self._instructions,
-                    input=state.history,
+                    input=context.input,
                     tools=self._tools.schemas(),
                 )
-            )
-
-            state.append_model_output(
-                response.output
             )
 
             tool_calls: list[
@@ -77,6 +77,11 @@ class AgentRuntime:
                     tool_calls.append(item)
 
             if not tool_calls:
+                state.record_step(
+                    response.output,
+                    [],
+                )
+
                 return response.output_text
 
             tool_outputs: ResponseInputParam = []
@@ -104,8 +109,9 @@ class AgentRuntime:
                     }
                 )
 
-            state.history.extend(
-                tool_outputs
+            state.record_step(
+                response.output,
+                tool_outputs,
             )
 
         raise RuntimeError(
