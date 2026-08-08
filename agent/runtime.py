@@ -1,9 +1,12 @@
+import json
+
 from openai import OpenAI
 from openai.types.responses import (
     ResponseFunctionToolCall,
     ResponseInputParam,
 )
 
+from agent.state import AgentState
 from tools.registry import ToolRegistry
 
 
@@ -23,19 +26,47 @@ class AgentRuntime:
         self._tools = tools
         self._max_steps = max_steps
 
-    def run(self, task: str) -> str:
-        response = self._client.responses.create(
-            model=self._model,
-            instructions=self._instructions,
-            input=task,
-            tools=self._tools.schemas(),
+    def run(
+        self,
+        task: str,
+    ) -> str:
+        state = AgentState.create(
+            task
         )
 
         for step in range(
             1,
             self._max_steps + 1,
         ):
-            print(f"\n[agent step {step}]")
+            state.step = step
+
+            print(
+                f"\n[agent step {state.step}]"
+            )
+            print(
+                f"[history items] "
+                f"{state.history_size}"
+            )
+
+            print(
+                json.dumps(
+                    state.history,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            response = (
+                self._client.responses.create(
+                    model=self._model,
+                    instructions=self._instructions,
+                    input=state.history,
+                    tools=self._tools.schemas(),
+                )
+            )
+
+            state.append_model_output(
+                response.output
+            )
 
             tool_calls: list[
                 ResponseFunctionToolCall
@@ -73,12 +104,8 @@ class AgentRuntime:
                     }
                 )
 
-            response = self._client.responses.create(
-                model=self._model,
-                instructions=self._instructions,
-                tools=self._tools.schemas(),
-                previous_response_id=response.id,
-                input=tool_outputs,
+            state.history.extend(
+                tool_outputs
             )
 
         raise RuntimeError(
