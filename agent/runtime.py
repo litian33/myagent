@@ -18,6 +18,7 @@ class AgentRuntime:
         instructions: str,
         tools: ToolRegistry,
         context: ContextManager,
+        max_output_tokens: int,
         max_steps: int = 10,
     ) -> None:
         self._client = client
@@ -25,6 +26,7 @@ class AgentRuntime:
         self._instructions = instructions
         self._tools = tools
         self._context = context
+        self._max_output_tokens = max_output_tokens
         self._max_steps = max_steps
 
     def run(
@@ -51,7 +53,8 @@ class AgentRuntime:
 
             print(
                 "[context] "
-                f"chars={context.input_chars}, "
+                f"tokens={context.input_tokens}, "
+                f"max_input_tokens={context.max_input_tokens}, "
                 f"blocks="
                 f"{context.included_blocks}/"
                 f"{context.total_blocks}, "
@@ -65,6 +68,10 @@ class AgentRuntime:
                     instructions=self._instructions,
                     input=context.input,
                     tools=self._tools.schemas(),
+                    max_output_tokens=(
+                                self._max_output_tokens
+                            ),
+                    truncation="disabled",
                 )
             )
 

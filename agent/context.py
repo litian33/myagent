@@ -1,12 +1,20 @@
-import json
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from openai.types.responses import ResponseInputParam
+from openai.types.responses import (
+    ResponseInputParam,
+)
 
 from agent.state import (
     AgentState,
     HistoryBlock,
 )
+
+
+TokenCounter = Callable[
+    [ResponseInputParam],
+    int,
+]
 
 
 class ContextBudgetExceeded(
@@ -22,12 +30,11 @@ class ContextBudgetExceeded(
 class ContextSnapshot:
     input: ResponseInputParam
 
-    input_chars: int
+    input_tokens: int
+    max_input_tokens: int
 
     total_blocks: int
-
     included_blocks: int
-
     dropped_blocks: int
 
 
@@ -35,15 +42,17 @@ class ContextManager:
     def __init__(
         self,
         *,
-        max_input_chars: int = 40_000,
+        count_tokens: TokenCounter,
+        max_input_tokens: int,
     ) -> None:
-        if max_input_chars <= 0:
+        if max_input_tokens <= 0:
             raise ValueError(
-                "max_input_chars must be positive"
+                "max_input_tokens must be positive"
             )
 
-        self._max_input_chars = (
-            max_input_chars
+        self._count_tokens = count_tokens
+        self._max_input_tokens = (
+            max_input_tokens
         )
 
     def build(
@@ -54,66 +63,58 @@ class ContextManager:
             *state.initial_input
         ]
 
-        initial_chars = (
-            self._estimate_chars(
-                initial
-            )
-        )
-
-        if (
-            initial_chars
-            > self._max_input_chars
-        ):
-            raise ContextBudgetExceeded(
-                "Initial task exceeds context budget"
-            )
-
-        selected: list[
-            HistoryBlock
-        ] = []
-
-        for block in reversed(
+        selected = list(
             state.history_blocks
-        ):
-            candidate_blocks = [
-                block,
-                *selected,
-            ]
-
-            candidate = self._flatten(
-                initial,
-                candidate_blocks,
-            )
-
-            candidate_chars = (
-                self._estimate_chars(
-                    candidate
-                )
-            )
-
-            if (
-                candidate_chars
-                <= self._max_input_chars
-            ):
-                selected = candidate_blocks
-                continue
-
-            if not selected:
-                raise ContextBudgetExceeded(
-                    "Most recent history block "
-                    "exceeds context budget"
-                )
-
-            break
+        )
 
         context = self._flatten(
             initial,
             selected,
         )
 
-        input_chars = self._estimate_chars(
+        input_tokens = self._count_tokens(
             context
         )
+
+        minimum_blocks = (
+            1
+            if state.history_blocks
+            else 0
+        )
+
+        while (
+            input_tokens
+            > self._max_input_tokens
+            and len(selected) > minimum_blocks
+        ):
+            selected.pop(0)
+
+            context = self._flatten(
+                initial,
+                selected,
+            )
+
+            input_tokens = (
+                self._count_tokens(
+                    context
+                )
+            )
+
+        if (
+            input_tokens
+            > self._max_input_tokens
+        ):
+            if state.history_blocks:
+                raise ContextBudgetExceeded(
+                    "Initial task and most recent "
+                    "history block exceed "
+                    "context budget"
+                )
+
+            raise ContextBudgetExceeded(
+                "Initial task exceeds "
+                "context budget"
+            )
 
         total_blocks = len(
             state.history_blocks
@@ -125,7 +126,10 @@ class ContextManager:
 
         return ContextSnapshot(
             input=context,
-            input_chars=input_chars,
+            input_tokens=input_tokens,
+            max_input_tokens=(
+                self._max_input_tokens
+            ),
             total_blocks=total_blocks,
             included_blocks=(
                 included_blocks
@@ -151,15 +155,3 @@ class ContextManager:
             )
 
         return result
-
-    @staticmethod
-    def _estimate_chars(
-        input_items: ResponseInputParam,
-    ) -> int:
-        return len(
-            json.dumps(
-                input_items,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-        )
