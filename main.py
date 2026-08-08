@@ -16,6 +16,7 @@ from agent.context import (
 from agent.runtime import AgentRuntime
 from tools.filesystem import FILESYSTEM_TOOLS
 from tools.registry import ToolRegistry
+from tools.token import create_token_counter
 
 INSTRUCTIONS = """
 You are MyAgent, a coding assistant.
@@ -25,31 +26,6 @@ Do not guess file contents.
 Read files when their contents are needed.
 """
 
-def create_token_counter(
-    *,
-    client: OpenAI,
-    model: str,
-    instructions: str,
-    tools: ToolRegistry,
-) -> TokenCounter:
-    tool_schemas = tools.schemas()
-
-    def count_tokens(
-        input_items: ResponseInputParam,
-    ) -> int:
-        result = (
-            client.responses.input_tokens.count(
-                model=model,
-                instructions=instructions,
-                input=input_items,
-                tools=tool_schemas,
-                truncation="disabled",
-            )
-        )
-
-        return result.input_tokens
-
-    return count_tokens
 
 def create_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
@@ -67,11 +43,7 @@ def main() -> None:
         base_url=os.getenv("OPENAI_BASE_URL"),
         api_key=os.getenv("OPENAI_API_KEY"),
     )
-    context_window_tokens = int(
-        os.environ[
-            "OPENAI_CONTEXT_WINDOW_TOKENS"
-        ]
-    )
+    context_window_tokens = int(os.environ["OPENAI_CONTEXT_WINDOW_TOKENS"])
 
     max_output_tokens = int(
         os.getenv(
@@ -87,11 +59,7 @@ def main() -> None:
         )
     )
 
-    max_input_tokens = (
-        context_window_tokens
-        - max_output_tokens
-        - safety_margin_tokens
-    )
+    max_input_tokens = context_window_tokens - max_output_tokens - safety_margin_tokens
 
     if max_input_tokens <= 0:
         raise ValueError(
@@ -108,8 +76,6 @@ def main() -> None:
     registry = create_tool_registry()
 
     token_counter = create_token_counter(
-        client=client,
-        model=model,
         instructions=INSTRUCTIONS,
         tools=registry,
     )
