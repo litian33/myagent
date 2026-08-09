@@ -7,6 +7,10 @@ from openai import OpenAI
 from agent.compaction import ContextCompactor
 from agent.context import ContextManager
 from agent.runtime import AgentRuntime
+from execution.bubblewrap import (
+    BubblewrapCommandExecutor,
+    BubblewrapConfig,
+)
 from execution.command import (
     CommandExecutor,
     LocalCommandExecutor,
@@ -158,7 +162,16 @@ def main() -> None:
     )
 
     workspace = Workspace(Path(__file__).resolve().parent)
-    command_executor = LocalCommandExecutor()
+    # command_executor = LocalCommandExecutor()
+    command_executor = BubblewrapCommandExecutor(
+        workspace=workspace,
+        config=BubblewrapConfig(
+            runtime_roots=(Path("/usr/local/go"),),
+            extra_path_entries=("/usr/local/go/bin",),
+        ),
+    )
+
+    command_executor.verify()
 
     registry = create_tool_registry(
         workspace=workspace,

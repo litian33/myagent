@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 PROTECTED_DIRECTORY_NAMES = frozenset(
@@ -247,3 +248,69 @@ class Workspace:
         suffix = Path(name).suffix
 
         return suffix in SECRET_FILE_SUFFIXES
+
+    def secret_paths(
+        self,
+    ) -> tuple[Path, ...]:
+        result: list[Path] = []
+
+        for (
+            directory,
+            directory_names,
+            file_names,
+        ) in os.walk(
+            self._root,
+            followlinks=False,
+        ):
+            current = Path(directory)
+
+            for name in list(directory_names):
+                lower = name.lower()
+
+                if lower in SECRET_DIRECTORY_NAMES:
+                    result.append(current / name)
+
+                    directory_names.remove(name)
+
+            for name in file_names:
+                lower = name.lower()
+
+                if self._is_secret_file_name(lower):
+                    result.append(current / name)
+
+            #
+            # Handle symlink aliases such as:
+            #
+            # config.txt -> .env
+            #
+            for name in [
+                *directory_names,
+                *file_names,
+            ]:
+                candidate = current / name
+
+                if not (candidate.is_symlink()):
+                    continue
+
+                try:
+                    resolved = candidate.resolve(strict=True)
+                except OSError:
+                    continue
+
+                if not (resolved.is_relative_to(self._root)):
+                    #
+                    # Existing workspace escape
+                    # should not be visible either.
+                    #
+                    result.append(candidate)
+
+                    continue
+
+                relative = resolved.relative_to(self._root)
+
+                try:
+                    self._validate_parts(relative.parts)
+                except ValueError:
+                    result.append(candidate)
+
+        return tuple(dict.fromkeys(result))
