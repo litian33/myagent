@@ -3,6 +3,9 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
+from policy.model import (
+    ToolCapability,
+)
 from tools.base import Tool, tool
 
 MAX_SEARCH_RESULTS = 20
@@ -28,7 +31,10 @@ class SearchMatch(TypedDict):
     text: str
 
 
-@tool(description=("List files and directories in a given directory."))
+@tool(
+    description=("List files and directories in a given directory."),
+    capability=ToolCapability.READ,
+)
 def list_files(path: str) -> list[str]:
     directory = Path(path)
 
@@ -41,7 +47,8 @@ def list_files(path: str) -> list[str]:
         "SHA-256 version identifier. When modifying an "
         "existing file, pass this sha256 value to write_file "
         "as expected_sha256. Never invent the hash."
-    )
+    ),
+    capability=ToolCapability.READ,
 )
 def read_file(
     path: str,
@@ -66,7 +73,8 @@ def read_file(
         "Search text files for a regular expression pattern. "
         "Use this to locate code, symbols, configuration, or "
         "text without reading every file."
-    )
+    ),
+    capability=ToolCapability.READ,
 )
 def grep(
     pattern: str,

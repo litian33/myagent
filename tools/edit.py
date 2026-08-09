@@ -7,6 +7,9 @@ import tempfile
 from pathlib import Path
 from typing import TypedDict
 
+from policy.model import (
+    ToolCapability,
+)
 from tools.base import Tool, tool
 
 MAX_WRITE_BYTES = 200_000
@@ -201,7 +204,8 @@ def create_write_file_tool(
             "expected_sha256='MISSING'. "
             "Writing outside the workspace or into protected "
             "runtime directories is not allowed."
-        )
+        ),
+        capability=ToolCapability.WRITE,
     )
     def write_file(
         path: str,
@@ -311,7 +315,8 @@ def create_apply_patch_tool(
             "Include enough surrounding context if the "
             "target text is not unique. "
             "Never invent expected_sha256."
-        )
+        ),
+        capability=ToolCapability.WRITE,
     )
     def apply_patch(
         path: str,

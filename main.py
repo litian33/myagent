@@ -7,6 +7,10 @@ from openai import OpenAI
 from agent.compaction import ContextCompactor
 from agent.context import ContextManager
 from agent.runtime import AgentRuntime
+from policy.approval import (
+    CliApprovalHandler,
+)
+from policy.engine import ToolPolicy
 from tools.edit import (
     create_apply_patch_tool,
     create_write_file_tool,
@@ -55,6 +59,10 @@ a new file with write_file.
 
 Do not attempt destructive commands, network access,
 or changes outside the workspace.
+
+If a tool call is denied by policy or not approved
+by the user, do not retry the same action unless
+the user explicitly asks you to reconsider it.
 """
 
 
@@ -145,6 +153,9 @@ def main() -> None:
         model=model,
         max_output_tokens=2048,
     )
+    policy = ToolPolicy()
+
+    approval = CliApprovalHandler()
     agent = AgentRuntime(
         client=client,
         model=model,
@@ -152,6 +163,8 @@ def main() -> None:
         tools=registry,
         context=context,
         compactor=compactor,
+        policy=policy,
+        approval=approval,
         max_output_tokens=max_output_tokens,
         max_steps=20,
     )

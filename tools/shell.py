@@ -6,6 +6,9 @@ import time
 from pathlib import Path
 from typing import TypedDict
 
+from policy.model import (
+    ToolCapability,
+)
 from tools.base import Tool, tool
 
 MAX_TIMEOUT_SECONDS = 120
@@ -206,7 +209,8 @@ def create_run_command_tool(
             "network commands, and commands outside the "
             "workspace are not allowed. "
             "Use cwd='.' for the workspace root."
-        )
+        ),
+        capability=ToolCapability.EXECUTE,
     )
     def run_command(
         command: str,

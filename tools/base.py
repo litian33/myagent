@@ -5,6 +5,10 @@ from typing import Any, TypeVar, get_type_hints
 
 from openai.types.responses import FunctionToolParam
 
+from policy.model import (
+    ToolCapability,
+)
+
 ToolHandler = Callable[..., Any]
 
 F = TypeVar(
@@ -13,10 +17,14 @@ F = TypeVar(
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class Tool:
     schema: FunctionToolParam
     handler: ToolHandler
+    capability: ToolCapability
 
     @property
     def name(self) -> str:
@@ -46,10 +54,7 @@ def python_type_to_json_schema(
     json_type = type_mapping.get(annotation)
 
     if json_type is None:
-        raise TypeError(
-            "Unsupported tool parameter type: "
-            f"{annotation!r}"
-        )
+        raise TypeError(f"Unsupported tool parameter type: {annotation!r}")
 
     return {
         "type": json_type,
@@ -71,8 +76,7 @@ def build_parameters_schema(
             inspect.Parameter.VAR_KEYWORD,
         ):
             raise TypeError(
-                "Tool functions cannot use *args or **kwargs: "
-                f"{handler.__name__}"
+                f"Tool functions cannot use *args or **kwargs: {handler.__name__}"
             )
 
         if parameter.default is not inspect.Parameter.empty:
@@ -85,13 +89,10 @@ def build_parameters_schema(
 
         if annotation is None:
             raise TypeError(
-                "Tool parameter must have a type annotation: "
-                f"{handler.__name__}.{name}"
+                f"Tool parameter must have a type annotation: {handler.__name__}.{name}"
             )
 
-        properties[name] = (
-            python_type_to_json_schema(annotation)
-        )
+        properties[name] = python_type_to_json_schema(annotation)
 
         required.append(name)
 
@@ -106,6 +107,7 @@ def build_parameters_schema(
 def tool(
     *,
     description: str,
+    capability: ToolCapability,
 ) -> Callable[[F], Tool]:
     def decorator(
         handler: F,
@@ -114,15 +116,14 @@ def tool(
             "type": "function",
             "name": handler.__name__,
             "description": description,
-            "parameters": build_parameters_schema(
-                handler
-            ),
+            "parameters": (build_parameters_schema(handler)),
             "strict": True,
         }
 
         return Tool(
             schema=schema,
             handler=handler,
+            capability=capability,
         )
 
     return decorator
