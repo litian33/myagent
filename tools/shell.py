@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import os
 import shlex
-import subprocess
-import time
 from pathlib import Path
 from typing import TypedDict
 
+from execution.command import (
+    CommandExecutor,
+    CommandRequest,
+)
 from policy.model import (
     ToolCapability,
 )
 from tools.base import Tool, tool
-from tools.workspace import Workspace
+from tools.workspace import (
+    Workspace,
+)
 
 SAFE_ENVIRONMENT_VARIABLES = (
     "PATH",
@@ -227,6 +231,7 @@ def _validate_command(
 def create_run_command_tool(
     *,
     workspace: Workspace,
+    executor: CommandExecutor,
 ) -> Tool:
 
     @tool(
@@ -253,8 +258,6 @@ def create_run_command_tool(
                 f"timeout_seconds must be between 1 and {MAX_TIMEOUT_SECONDS}"
             )
 
-        cwd_path = workspace.resolve_directory(cwd)
-
         try:
             argv = shlex.split(command)
         except ValueError as exc:
@@ -262,60 +265,25 @@ def create_run_command_tool(
 
         _validate_command(argv)
 
-        started_at = time.monotonic()
+        cwd_path = workspace.resolve_directory(cwd)
 
-        try:
-            completed = subprocess.run(
-                argv,
+        execution_result = executor.execute(
+            CommandRequest(
+                argv=tuple(argv),
                 cwd=cwd_path,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_seconds,
-                check=False,
-                shell=False,
-                env=_build_safe_environment(),
+                timeout_seconds=(timeout_seconds),
             )
-
-            stdout, stdout_truncated = _truncate_output(completed.stdout)
-
-            stderr, stderr_truncated = _truncate_output(completed.stderr)
-
-            duration_ms = int((time.monotonic() - started_at) * 1000)
-
-            return {
-                "command": command,
-                "cwd": workspace.relative_path(cwd_path),
-                "exit_code": (completed.returncode),
-                "stdout": stdout,
-                "stderr": stderr,
-                "stdout_truncated": (stdout_truncated),
-                "stderr_truncated": (stderr_truncated),
-                "timed_out": False,
-                "duration_ms": duration_ms,
-            }
-
-        except subprocess.TimeoutExpired as exc:
-            stdout = _decode_timeout_output(exc.stdout)
-            stderr = _decode_timeout_output(exc.stderr)
-
-            stdout, stdout_truncated = _truncate_output(stdout)
-
-            stderr, stderr_truncated = _truncate_output(stderr)
-
-            duration_ms = int((time.monotonic() - started_at) * 1000)
-
-            return {
-                "command": command,
-                "cwd": str(cwd_path.relative_to(workspace_root)) or ".",
-                "exit_code": None,
-                "stdout": stdout,
-                "stderr": stderr,
-                "stdout_truncated": (stdout_truncated),
-                "stderr_truncated": (stderr_truncated),
-                "timed_out": True,
-                "duration_ms": duration_ms,
-            }
+        )
+        return {
+            "command": command,
+            "cwd": (workspace.relative_path(cwd_path)),
+            "exit_code": (execution_result.exit_code),
+            "stdout": (execution_result.stdout),
+            "stderr": (execution_result.stderr),
+            "stdout_truncated": (execution_result.stdout_truncated),
+            "stderr_truncated": (execution_result.stderr_truncated),
+            "timed_out": (execution_result.timed_out),
+            "duration_ms": (execution_result.duration_ms),
+        }
 
     return run_command

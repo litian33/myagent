@@ -7,6 +7,10 @@ from openai import OpenAI
 from agent.compaction import ContextCompactor
 from agent.context import ContextManager
 from agent.runtime import AgentRuntime
+from execution.command import (
+    CommandExecutor,
+    LocalCommandExecutor,
+)
 from policy.approval import (
     CliApprovalHandler,
 )
@@ -87,6 +91,7 @@ private keys, tokens, or environment secrets.
 def create_tool_registry(
     *,
     workspace: Workspace,
+    command_executor: CommandExecutor,
 ) -> ToolRegistry:
     registry = ToolRegistry()
 
@@ -96,6 +101,7 @@ def create_tool_registry(
     registry.register(
         create_run_command_tool(
             workspace=workspace,
+            executor=(command_executor),
         )
     )
 
@@ -152,9 +158,11 @@ def main() -> None:
     )
 
     workspace = Workspace(Path(__file__).resolve().parent)
+    command_executor = LocalCommandExecutor()
 
     registry = create_tool_registry(
         workspace=workspace,
+        command_executor=(command_executor),
     )
 
     token_counter = create_token_counter(
