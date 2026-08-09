@@ -8,6 +8,7 @@ from agent.compaction import ContextCompactor
 from agent.context import ContextManager
 from agent.runtime import AgentRuntime
 from tools.edit import (
+    create_apply_patch_tool,
     create_write_file_tool,
 )
 from tools.filesystem import FILESYSTEM_TOOLS
@@ -26,19 +27,31 @@ from the local environment.
 Do not guess file contents.
 Read files when their contents are needed.
 
-Before modifying an existing file:
+When modifying an existing file:
 1. read the current file;
-2. use the sha256 returned by read_file as the
-   expected_sha256 argument to write_file;
-3. never invent an expected_sha256 value.
+2. use the sha256 returned by read_file as
+   expected_sha256;
+3. prefer apply_patch for localized edits;
+4. use write_file only for creating files or when
+   a complete replacement is genuinely appropriate;
+5. never invent expected_sha256.
+
+For apply_patch:
+- old_text must be copied exactly from the current
+  file content;
+- include enough surrounding text to make old_text
+  unique;
+- if the patch is rejected, read the file again
+  rather than guessing.
 
 After modifying code:
-1. inspect the resulting git diff;
+1. inspect git diff;
 2. run relevant tests or static checks;
-3. fix problems if necessary before finishing.
+3. fix problems if necessary;
+4. do not claim success until verification passes.
 
 Use expected_sha256="MISSING" only when creating
-a file that does not already exist.
+a new file with write_file.
 
 Do not attempt destructive commands, network access,
 or changes outside the workspace.
@@ -62,6 +75,12 @@ def create_tool_registry(
 
     registry.register(
         create_write_file_tool(
+            workspace_root=workspace_root,
+        )
+    )
+
+    registry.register(
+        create_apply_patch_tool(
             workspace_root=workspace_root,
         )
     )

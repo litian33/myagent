@@ -3,6 +3,8 @@ import hashlib
 import pytest
 
 from tools.edit import (
+    _find_unique_match,
+    create_apply_patch_tool,
     create_write_file_tool,
 )
 
@@ -115,12 +117,129 @@ def test_reject_git_directory(
         )
 
 
-def add(
-    a: int,
-    b: int,
-) -> int:
-    return a + b
+def test_find_unique_match() -> None:
+    content = "hello\nworld\n"
+
+    index = _find_unique_match(
+        content=content,
+        old_text="world",
+    )
+
+    assert index == 6
 
 
-def test_add() -> None:
-    assert add(1, 2) == 3
+def test_reject_missing_match() -> None:
+    with pytest.raises(
+        ValueError,
+        match="not found",
+    ):
+        _find_unique_match(
+            content="hello",
+            old_text="world",
+        )
+
+
+def test_reject_ambiguous_match() -> None:
+    with pytest.raises(
+        ValueError,
+        match="ambiguous",
+    ):
+        _find_unique_match(
+            content="foo foo",
+            old_text="foo",
+        )
+
+
+def test_reject_empty_old_text() -> None:
+    with pytest.raises(
+        ValueError,
+        match="cannot be empty",
+    ):
+        _find_unique_match(
+            content="hello",
+            old_text="",
+        )
+
+
+def test_apply_patch(
+    tmp_path,
+) -> None:
+    target = tmp_path / "calc.py"
+
+    original = "def add(a, b):\n    return a - b\n"
+
+    target.write_text(
+        original,
+        encoding="utf-8",
+    )
+
+    tool = create_apply_patch_tool(
+        workspace_root=tmp_path,
+    )
+
+    result = tool.handler(
+        path="calc.py",
+        old_text="return a - b",
+        new_text="return a + b",
+        expected_sha256=sha256(original),
+    )
+
+    assert target.read_text(encoding="utf-8") == ("def add(a, b):\n    return a + b\n")
+
+    assert result["previous_sha256"] == sha256(original)
+
+
+def test_apply_patch_rejects_ambiguous_text(
+    tmp_path,
+) -> None:
+    target = tmp_path / "example.py"
+
+    original = "return None\nreturn None\n"
+
+    target.write_text(
+        original,
+        encoding="utf-8",
+    )
+
+    tool = create_apply_patch_tool(
+        workspace_root=tmp_path,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="ambiguous",
+    ):
+        tool.handler(
+            path="example.py",
+            old_text="return None",
+            new_text="return value",
+            expected_sha256=sha256(original),
+        )
+
+
+def test_apply_patch_rejects_stale_version(
+    tmp_path,
+) -> None:
+    target = tmp_path / "example.py"
+
+    target.write_text(
+        "current\n",
+        encoding="utf-8",
+    )
+
+    tool = create_apply_patch_tool(
+        workspace_root=tmp_path,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="changed since it was read",
+    ):
+        tool.handler(
+            path="example.py",
+            old_text="current",
+            new_text="new",
+            expected_sha256=sha256("old\n"),
+        )
+
+    assert target.read_text(encoding="utf-8") == "current\n"
