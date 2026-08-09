@@ -124,6 +124,49 @@ def create_tool_registry(
     return registry
 
 
+def create_command_executor(
+    *,
+    workspace: Workspace,
+) -> CommandExecutor:
+    config = BubblewrapConfig(
+        runtime_roots=(Path("/usr/local/go"),),
+        extra_path_entries=("/usr/local/go/bin",),
+    )
+
+    try:
+        executor = BubblewrapCommandExecutor(
+            workspace=workspace,
+            config=config,
+        )
+
+        executor.verify()
+
+        return executor
+
+    except (RuntimeError, ValueError, OSError) as exc:
+        require_sandbox = os.getenv(
+            "MYAGENT_REQUIRE_SANDBOX",
+            "",
+        ).strip().lower()
+
+        if require_sandbox in {
+            "1",
+            "true",
+            "yes",
+        }:
+            raise
+
+        print(
+            "[warning] bubblewrap sandbox unavailable: "
+            f"{exc}\n"
+            "The sandbox requires Linux with bubblewrap installed "
+            "(e.g. 'sudo apt install bubblewrap'). "
+            "Falling back to the local command executor without a sandbox."
+        )
+
+        return LocalCommandExecutor()
+
+
 def main() -> None:
     load_dotenv()
 
@@ -162,16 +205,9 @@ def main() -> None:
     )
 
     workspace = Workspace(Path(__file__).resolve().parent)
-    # command_executor = LocalCommandExecutor()
-    command_executor = BubblewrapCommandExecutor(
+    command_executor = create_command_executor(
         workspace=workspace,
-        config=BubblewrapConfig(
-            runtime_roots=(Path("/usr/local/go"),),
-            extra_path_entries=("/usr/local/go/bin",),
-        ),
     )
-
-    command_executor.verify()
 
     registry = create_tool_registry(
         workspace=workspace,

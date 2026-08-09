@@ -8,10 +8,13 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+
 from execution.command import (
     CommandExecutionResult,
     CommandRequest,
     IsolationProfile,
+    decode_timeout_output,
+    truncate_output,
 )
 from tools.workspace import Workspace
 
@@ -98,43 +101,6 @@ def _append_system_config_mounts(
         )
 
 
-def _append_environment(
-    arguments: list[str],
-    *,
-    path: str,
-) -> None:
-    environment = {
-        "HOME": "/home/myagent",
-        "TMPDIR": "/tmp",
-        "PATH": path,
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "XDG_CACHE_HOME": "/tmp/cache",
-    }
-
-    arguments.append("--clearenv")
-
-    for name, value in environment.items():
-        arguments.extend(
-            [
-                "--setenv",
-                name,
-                value,
-            ]
-        )
-
-
-def _build_sandbox_path(
-    config: BubblewrapConfig,
-) -> str:
-    entries = [
-        *config.extra_path_entries,
-        *DEFAULT_SANDBOX_PATHS,
-    ]
-
-    return ":".join(dict.fromkeys(entries))
-
-
 class BubblewrapCommandExecutor:
     def __init__(
         self,
@@ -156,7 +122,12 @@ class BubblewrapCommandExecutor:
         self._config = config
 
         for root in config.runtime_roots:
-            resolved = root.resolve(strict=True)
+            try:
+                resolved = root.resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(
+                    f"Bubblewrap runtime root does not exist: {root}"
+                ) from exc
 
             if not (resolved.is_dir()):
                 raise ValueError(f"Bubblewrap runtime root must be a directory: {root}")
@@ -171,6 +142,73 @@ class BubblewrapCommandExecutor:
             network_isolated=True,
             process_isolated=True,
         )
+
+    def _venv_bin(
+        self,
+    ) -> Path | None:
+        candidate = self._workspace.root / ".venv" / "bin"
+
+        if not candidate.is_dir():
+            return None
+
+        return candidate
+
+    def _venv_python_roots(
+        self,
+    ) -> tuple[Path, ...]:
+        venv_bin = self._venv_bin()
+
+        if venv_bin is None:
+            return ()
+
+        python = venv_bin / "python"
+
+        if not python.exists():
+            python = venv_bin / "python3"
+
+        if not python.exists():
+            return ()
+
+        try:
+            real = python.resolve(strict=True)
+        except OSError:
+            return ()
+
+        if real.is_relative_to(self._workspace.root):
+            return ()
+
+        for root in SYSTEM_RUNTIME_PATHS:
+            try:
+                if real.is_relative_to(root.resolve(strict=True)):
+                    return ()
+            except OSError:
+                continue
+
+        install_root = real.parent.parent
+
+        if install_root == real.parent:
+            return ()
+
+        return (install_root,)
+
+    def _sandbox_path_entries(
+        self,
+    ) -> tuple[str, ...]:
+        entries = list(self._config.extra_path_entries)
+
+        venv_bin = self._venv_bin()
+
+        if venv_bin is not None:
+            entries.append(str(venv_bin))
+
+        entries.extend(DEFAULT_SANDBOX_PATHS)
+
+        return tuple(dict.fromkeys(entries))
+
+    def _build_sandbox_path(
+        self,
+    ) -> str:
+        return ":".join(self._sandbox_path_entries())
 
     def _build_arguments(
         self,
@@ -221,6 +259,20 @@ class BubblewrapCommandExecutor:
             )
 
         #
+        # The venv interpreter may live outside the workspace
+        # (e.g. asdf/pyenv installs). Mount its install root
+        # read-only so sandboxed python/pytest can run.
+        #
+        for venv_root in self._venv_python_roots():
+            arguments.extend(
+                [
+                    "--ro-bind",
+                    str(venv_root),
+                    str(venv_root),
+                ]
+            )
+
+        #
         # Workspace itself is writable.
         #
         arguments.extend(
@@ -246,9 +298,43 @@ class BubblewrapCommandExecutor:
             )
 
         #
+        # Remote URLs in .git/config can embed credentials.
+        # Hide the file from sandboxed commands.
+        #
+        git_config = git_dir / "config"
+
+        if git_config.is_file():
+            arguments.extend(
+                [
+                    "--ro-bind",
+                    str(empty_secret_file),
+                    str(git_config),
+                ]
+            )
+
+        #
         # Hide workspace secrets.
         #
+        venv_roots = self._venv_python_roots()
+
         for secret in self._workspace.secret_paths():
+            if secret.is_symlink():
+                try:
+                    target = secret.resolve(strict=True)
+                except OSError:
+                    target = None
+
+                if target is not None and any(
+                    target.is_relative_to(root)
+                    for root in venv_roots
+                ):
+                    #
+                    # Symlink into an explicitly exposed runtime
+                    # root (e.g. .venv/bin/python -> interpreter
+                    # install). Masking it would break the venv.
+                    #
+                    continue
+
             if secret.is_dir():
                 arguments.extend(
                     [
@@ -266,7 +352,7 @@ class BubblewrapCommandExecutor:
                     ]
                 )
 
-        sandbox_path = _build_sandbox_path(self._config)
+        sandbox_path = self._build_sandbox_path()
 
         environment = {
             "HOME": "/home/myagent",
@@ -302,15 +388,37 @@ class BubblewrapCommandExecutor:
         self,
         executable: str,
     ) -> Path:
-        resolved = shutil.which(executable)
+        #
+        # Resolve against the sandbox PATH first, then fall back
+        # to the host PATH. This keeps lookup consistent with the
+        # environment the command will actually run in.
+        #
+        search_path = os.pathsep.join(
+            [
+                *self._sandbox_path_entries(),
+                os.environ.get("PATH", ""),
+            ]
+        )
+
+        resolved = shutil.which(
+            executable,
+            path=search_path,
+        )
 
         if resolved is None:
-            raise ValueError(f"Executable not found: {executable}")
+            raise ValueError(f"Executable not found in sandbox PATH: {executable}")
 
-        path = Path(resolved).resolve()
+        candidate = Path(resolved)
 
-        if path.is_relative_to(self._workspace.root):
-            return path
+        #
+        # Keep workspace-relative paths (e.g. .venv/bin/python3)
+        # as-is: resolving the symlink chain would point at the
+        # base interpreter and hide the virtualenv from Python.
+        #
+        if candidate.is_relative_to(self._workspace.root):
+            return candidate
+
+        path = candidate.resolve()
 
         allowed_roots = [
             Path("/usr"),
@@ -319,6 +427,7 @@ class BubblewrapCommandExecutor:
             Path("/lib"),
             Path("/lib64"),
             *self._config.runtime_roots,
+            *self._venv_python_roots(),
         ]
 
         for root in allowed_roots:
@@ -357,6 +466,11 @@ class BubblewrapCommandExecutor:
                     timeout=(request.timeout_seconds),
                     check=False,
                     #
+                    # The sandboxed command must not read the
+                    # agent's terminal stdin.
+                    #
+                    stdin=subprocess.DEVNULL,
+                    #
                     # This is the environment
                     # of bwrap itself.
                     #
@@ -367,13 +481,13 @@ class BubblewrapCommandExecutor:
                 )
 
             except subprocess.TimeoutExpired as exc:
-                stdout = _decode_timeout_output(exc.stdout)
+                stdout = decode_timeout_output(exc.stdout)
 
-                stderr = _decode_timeout_output(exc.stderr)
+                stderr = decode_timeout_output(exc.stderr)
 
-                stdout, (stdout_truncated) = _truncate_output(stdout)
+                stdout, (stdout_truncated) = truncate_output(stdout)
 
-                stderr, (stderr_truncated) = _truncate_output(stderr)
+                stderr, (stderr_truncated) = truncate_output(stderr)
 
                 return CommandExecutionResult(
                     exit_code=None,
@@ -385,9 +499,9 @@ class BubblewrapCommandExecutor:
                     duration_ms=int((time.monotonic() - started_at) * 1000),
                 )
 
-        stdout, (stdout_truncated) = _truncate_output(completed.stdout)
+        stdout, (stdout_truncated) = truncate_output(completed.stdout)
 
-        stderr, (stderr_truncated) = _truncate_output(completed.stderr)
+        stderr, (stderr_truncated) = truncate_output(completed.stderr)
 
         return CommandExecutionResult(
             exit_code=(completed.returncode),
@@ -402,27 +516,28 @@ class BubblewrapCommandExecutor:
     def verify(
         self,
     ) -> None:
+        request = CommandRequest(
+            argv=("true",),
+            cwd=self._workspace.root,
+            timeout_seconds=5,
+        )
+
+        executable = self._resolve_executable("true")
+
+        with tempfile.NamedTemporaryFile() as empty_secret_file:
+            arguments = self._build_arguments(
+                request=request,
+                executable=executable,
+                empty_secret_file=(Path(empty_secret_file.name)),
+            )
+
         probe = subprocess.run(
-            [
-                str(self._binary),
-                "--unshare-user",
-                "--unshare-pid",
-                "--unshare-net",
-                "--new-session",
-                "--ro-bind",
-                "/usr",
-                "/usr",
-                "--proc",
-                "/proc",
-                "--dev",
-                "/dev",
-                "--",
-                "/usr/bin/true",
-            ],
+            arguments,
             capture_output=True,
             text=True,
             timeout=5,
             check=False,
+            stdin=subprocess.DEVNULL,
             env={
                 "PATH": "/usr/bin:/bin",
             },

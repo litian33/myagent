@@ -90,7 +90,7 @@ def _build_safe_environment() -> dict[str, str]:
     return result
 
 
-def _truncate_output(
+def truncate_output(
     value: str,
 ) -> tuple[str, bool]:
     if len(value) <= MAX_STREAM_CHARS:
@@ -105,7 +105,7 @@ def _truncate_output(
     )
 
 
-def _decode_timeout_output(
+def decode_timeout_output(
     value: str | bytes | None,
 ) -> str:
     if value is None:
@@ -155,9 +155,9 @@ class LocalCommandExecutor:
                 env=(_build_safe_environment()),
             )
 
-            stdout, (stdout_truncated) = _truncate_output(completed.stdout)
+            stdout, (stdout_truncated) = truncate_output(completed.stdout)
 
-            stderr, (stderr_truncated) = _truncate_output(completed.stderr)
+            stderr, (stderr_truncated) = truncate_output(completed.stderr)
 
             return CommandExecutionResult(
                 exit_code=(completed.returncode),
@@ -170,13 +170,13 @@ class LocalCommandExecutor:
             )
 
         except subprocess.TimeoutExpired as exc:
-            stdout = _decode_timeout_output(exc.stdout)
+            stdout = decode_timeout_output(exc.stdout)
 
-            stderr = _decode_timeout_output(exc.stderr)
+            stderr = decode_timeout_output(exc.stderr)
 
-            stdout, (stdout_truncated) = _truncate_output(stdout)
+            stdout, (stdout_truncated) = truncate_output(stdout)
 
-            stderr, (stderr_truncated) = _truncate_output(stderr)
+            stderr, (stderr_truncated) = truncate_output(stderr)
 
             return CommandExecutionResult(
                 exit_code=None,
