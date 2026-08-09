@@ -7,6 +7,9 @@ from openai import OpenAI
 from agent.compaction import ContextCompactor
 from agent.context import ContextManager
 from agent.runtime import AgentRuntime
+from tools.edit import (
+    create_write_file_tool,
+)
 from tools.filesystem import FILESYSTEM_TOOLS
 from tools.registry import ToolRegistry
 from tools.shell import (
@@ -23,12 +26,24 @@ from the local environment.
 Do not guess file contents.
 Read files when their contents are needed.
 
-Use run_command when you need to inspect repository
-state or run tests, linters, or static checks.
+Before modifying an existing file:
+1. read the current file;
+2. use the sha256 returned by read_file as the
+   expected_sha256 argument to write_file;
+3. never invent an expected_sha256 value.
+
+After modifying code:
+1. inspect the resulting git diff;
+2. run relevant tests or static checks;
+3. fix problems if necessary before finishing.
+
+Use expected_sha256="MISSING" only when creating
+a file that does not already exist.
 
 Do not attempt destructive commands, network access,
 or changes outside the workspace.
 """
+
 
 def create_tool_registry(
     *,
@@ -45,7 +60,14 @@ def create_tool_registry(
         )
     )
 
+    registry.register(
+        create_write_file_tool(
+            workspace_root=workspace_root,
+        )
+    )
+
     return registry
+
 
 def main() -> None:
     load_dotenv()
@@ -84,11 +106,7 @@ def main() -> None:
         "gpt-5.6-luna",
     )
 
-    workspace_root = (
-        Path(__file__)
-        .resolve()
-        .parent
-    )
+    workspace_root = Path(__file__).resolve().parent
 
     registry = create_tool_registry(
         workspace_root=workspace_root,
@@ -116,7 +134,7 @@ def main() -> None:
         context=context,
         compactor=compactor,
         max_output_tokens=max_output_tokens,
-        max_steps=10,
+        max_steps=20,
     )
 
     task = input("You: ").strip()

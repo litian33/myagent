@@ -1,3 +1,4 @@
+import hashlib
 import re
 from pathlib import Path
 from typing import TypedDict
@@ -15,35 +16,50 @@ SEARCH_EXCLUDED_DIRS = {
 }
 
 
+class FileContent(TypedDict):
+    path: str
+    content: str
+    sha256: str
+
+
 class SearchMatch(TypedDict):
     path: str
     line: int
     text: str
 
-@tool(
-    description=(
-        "List files and directories in a given directory."
-    )
-)
+
+@tool(description=("List files and directories in a given directory."))
 def list_files(path: str) -> list[str]:
     directory = Path(path)
 
-    return [
-        item.name
-        for item in directory.iterdir()
-    ]
+    return [item.name for item in directory.iterdir()]
+
 
 @tool(
     description=(
-        "Read the text content of a file."
+        "Read the text content of a file and return its "
+        "SHA-256 version identifier. When modifying an "
+        "existing file, pass this sha256 value to write_file "
+        "as expected_sha256. Never invent the hash."
     )
 )
-def read_file(path: str) -> str:
+def read_file(
+    path: str,
+) -> FileContent:
     file_path = Path(path)
 
-    return file_path.read_text(
-        encoding="utf-8",
+    data = file_path.read_bytes()
+
+    content = data.decode(
+        "utf-8",
     )
+
+    return {
+        "path": str(file_path),
+        "content": content,
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+
 
 @tool(
     description=(
@@ -61,9 +77,7 @@ def grep(
     try:
         regex = re.compile(pattern)
     except re.error as exc:
-        raise ValueError(
-            f"Invalid regular expression: {exc}"
-        ) from exc
+        raise ValueError(f"Invalid regular expression: {exc}") from exc
 
     matches: list[SearchMatch] = []
 
@@ -79,17 +93,11 @@ def grep(
         if not file_path.is_file():
             continue
 
-        if any(
-            part in SEARCH_EXCLUDED_DIRS
-            for part in file_path.parts
-        ):
+        if any(part in SEARCH_EXCLUDED_DIRS for part in file_path.parts):
             continue
 
         try:
-            if (
-                file_path.stat().st_size
-                > MAX_SEARCH_FILE_BYTES
-            ):
+            if file_path.stat().st_size > MAX_SEARCH_FILE_BYTES:
                 continue
 
             with file_path.open(
@@ -109,10 +117,7 @@ def grep(
                             }
                         )
 
-                        if (
-                            len(matches)
-                            >= MAX_SEARCH_RESULTS
-                        ):
+                        if len(matches) >= MAX_SEARCH_RESULTS:
                             break
 
         except (
@@ -122,6 +127,7 @@ def grep(
             continue
 
     return matches
+
 
 FILESYSTEM_TOOLS: tuple[Tool, ...] = (
     list_files,
