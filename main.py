@@ -15,12 +15,17 @@ from tools.edit import (
     create_apply_patch_tool,
     create_write_file_tool,
 )
-from tools.filesystem import FILESYSTEM_TOOLS
+from tools.filesystem import (
+    create_filesystem_tools,
+)
 from tools.registry import ToolRegistry
 from tools.shell import (
     create_run_command_tool,
 )
 from tools.token import create_token_counter
+from tools.workspace import (
+    Workspace,
+)
 
 INSTRUCTIONS = """
 You are MyAgent, a coding assistant.
@@ -63,33 +68,46 @@ or changes outside the workspace.
 If a tool call is denied by policy or not approved
 by the user, do not retry the same action unless
 the user explicitly asks you to reconsider it.
+
+All filesystem access is restricted to the current
+workspace.
+
+Protected or secret resources must not be accessed.
+
+If access to a file is denied by the workspace,
+do not attempt to bypass the restriction using
+run_command, git, Python, shell commands, symlinks,
+or alternative paths.
+
+Do not request or expose credentials, API keys,
+private keys, tokens, or environment secrets.
 """
 
 
 def create_tool_registry(
     *,
-    workspace_root: Path,
+    workspace: Workspace,
 ) -> ToolRegistry:
     registry = ToolRegistry()
 
-    for tool in FILESYSTEM_TOOLS:
+    for tool in create_filesystem_tools(workspace=workspace):
         registry.register(tool)
 
     registry.register(
         create_run_command_tool(
-            workspace_root=workspace_root,
+            workspace=workspace,
         )
     )
 
     registry.register(
         create_write_file_tool(
-            workspace_root=workspace_root,
+            workspace=workspace,
         )
     )
 
     registry.register(
         create_apply_patch_tool(
-            workspace_root=workspace_root,
+            workspace=workspace,
         )
     )
 
@@ -133,10 +151,10 @@ def main() -> None:
         "gpt-5.6-luna",
     )
 
-    workspace_root = Path(__file__).resolve().parent
+    workspace = Workspace(Path(__file__).resolve().parent)
 
     registry = create_tool_registry(
-        workspace_root=workspace_root,
+        workspace=workspace,
     )
 
     token_counter = create_token_counter(

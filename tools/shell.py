@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import time
@@ -10,6 +11,22 @@ from policy.model import (
     ToolCapability,
 )
 from tools.base import Tool, tool
+from tools.workspace import Workspace
+
+SAFE_ENVIRONMENT_VARIABLES = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TERM",
+    "TMPDIR",
+    "VIRTUAL_ENV",
+    # Windows compatibility.
+    "SYSTEMROOT",
+    "WINDIR",
+)
 
 MAX_TIMEOUT_SECONDS = 120
 MAX_STREAM_CHARS = 5_000
@@ -39,6 +56,18 @@ class CommandResult(TypedDict):
 
     timed_out: bool
     duration_ms: int
+
+
+def _build_safe_environment() -> dict[str, str]:
+    result: dict[str, str] = {}
+
+    for name in SAFE_ENVIRONMENT_VARIABLES:
+        value = os.environ.get(name)
+
+        if value is not None:
+            result[name] = value
+
+    return result
 
 
 def _truncate_output(
@@ -197,9 +226,8 @@ def _validate_command(
 
 def create_run_command_tool(
     *,
-    workspace_root: Path,
+    workspace: Workspace,
 ) -> Tool:
-    workspace_root = workspace_root.resolve()
 
     @tool(
         description=(
@@ -225,10 +253,7 @@ def create_run_command_tool(
                 f"timeout_seconds must be between 1 and {MAX_TIMEOUT_SECONDS}"
             )
 
-        cwd_path = _resolve_cwd(
-            workspace_root=workspace_root,
-            cwd=cwd,
-        )
+        cwd_path = workspace.resolve_directory(cwd)
 
         try:
             argv = shlex.split(command)
@@ -250,6 +275,7 @@ def create_run_command_tool(
                 timeout=timeout_seconds,
                 check=False,
                 shell=False,
+                env=_build_safe_environment(),
             )
 
             stdout, stdout_truncated = _truncate_output(completed.stdout)
@@ -260,7 +286,7 @@ def create_run_command_tool(
 
             return {
                 "command": command,
-                "cwd": str(cwd_path.relative_to(workspace_root)) or ".",
+                "cwd": workspace.relative_path(cwd_path),
                 "exit_code": (completed.returncode),
                 "stdout": stdout,
                 "stderr": stderr,

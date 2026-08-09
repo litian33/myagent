@@ -11,18 +11,13 @@ from policy.model import (
     ToolCapability,
 )
 from tools.base import Tool, tool
+from tools.workspace import (
+    Workspace,
+)
 
 MAX_WRITE_BYTES = 200_000
 
 MISSING_FILE_SHA256 = "MISSING"
-
-
-PROTECTED_PATH_PARTS = {
-    ".git",
-    ".venv",
-    "__pycache__",
-    "node_modules",
-}
 
 
 class WriteFileResult(TypedDict):
@@ -48,53 +43,53 @@ class PatchResult(TypedDict):
     bytes_written: int
 
 
-def _resolve_target_path(
-    *,
-    workspace_root: Path,
-    path: str,
-) -> Path:
-    relative = Path(path)
+# def _resolve_target_path(
+#     *,
+#     workspace_root: Path,
+#     path: str,
+# ) -> Path:
+#     relative = Path(path)
 
-    if relative.is_absolute():
-        raise ValueError("File path must be relative to the workspace root")
+#     if relative.is_absolute():
+#         raise ValueError("File path must be relative to the workspace root")
 
-    if not relative.parts:
-        raise ValueError("File path cannot be empty")
+#     if not relative.parts:
+#         raise ValueError("File path cannot be empty")
 
-    if any(part in PROTECTED_PATH_PARTS for part in relative.parts):
-        raise ValueError("Writing to protected workspace paths is not allowed")
+#     if any(part in PROTECTED_PATH_PARTS for part in relative.parts):
+#         raise ValueError("Writing to protected workspace paths is not allowed")
 
-    candidate = workspace_root / relative
+#     candidate = workspace_root / relative
 
-    #
-    # Do not allow writing through an
-    # existing symbolic link.
-    #
-    if candidate.is_symlink():
-        raise ValueError("Writing through symbolic links is not allowed")
+#     #
+#     # Do not allow writing through an
+#     # existing symbolic link.
+#     #
+#     if candidate.is_symlink():
+#         raise ValueError("Writing through symbolic links is not allowed")
 
-    resolved = candidate.resolve(
-        strict=False,
-    )
+#     resolved = candidate.resolve(
+#         strict=False,
+#     )
 
-    if not resolved.is_relative_to(workspace_root):
-        raise ValueError("File path must stay inside the workspace")
+#     if not resolved.is_relative_to(workspace_root):
+#         raise ValueError("File path must stay inside the workspace")
 
-    if resolved.exists():
-        if not resolved.is_file():
-            raise ValueError(f"Target is not a file: {path}")
-    else:
-        parent = resolved.parent
+#     if resolved.exists():
+#         if not resolved.is_file():
+#             raise ValueError(f"Target is not a file: {path}")
+#     else:
+#         parent = resolved.parent
 
-        if not parent.exists():
-            raise ValueError(
-                f"Parent directory does not exist: {parent.relative_to(workspace_root)}"
-            )
+#         if not parent.exists():
+#             raise ValueError(
+#                 f"Parent directory does not exist: {parent.relative_to(workspace_root)}"
+#             )
 
-        if not parent.is_dir():
-            raise ValueError("Parent path is not a directory")
+#         if not parent.is_dir():
+#             raise ValueError("Parent path is not a directory")
 
-    return resolved
+#     return resolved
 
 
 def _sha256_bytes(
@@ -189,9 +184,8 @@ def _atomic_write(
 
 def create_write_file_tool(
     *,
-    workspace_root: Path,
+    workspace: Workspace,
 ) -> Tool:
-    workspace_root = workspace_root.resolve()
 
     @tool(
         description=(
@@ -212,10 +206,7 @@ def create_write_file_tool(
         content: str,
         expected_sha256: str,
     ) -> WriteFileResult:
-        target = _resolve_target_path(
-            workspace_root=workspace_root,
-            path=path,
-        )
+        target = workspace.resolve_write_file(path)
 
         data = content.encode(
             "utf-8",
@@ -253,7 +244,7 @@ def create_write_file_tool(
         new_sha256 = _sha256_bytes(data)
 
         return {
-            "path": str(target.relative_to(workspace_root)),
+            "path": workspace.relative_path(target),
             "created": created,
             "previous_sha256": (previous_sha256),
             "sha256": new_sha256,
@@ -298,9 +289,8 @@ def _find_unique_match(
 
 def create_apply_patch_tool(
     *,
-    workspace_root: Path,
+    workspace: Workspace,
 ) -> Tool:
-    workspace_root = workspace_root.resolve()
 
     @tool(
         description=(
@@ -324,10 +314,7 @@ def create_apply_patch_tool(
         new_text: str,
         expected_sha256: str,
     ) -> PatchResult:
-        target = _resolve_target_path(
-            workspace_root=workspace_root,
-            path=path,
-        )
+        target = workspace.resolve_write_file(path)
 
         if not target.exists():
             raise ValueError(
@@ -393,7 +380,7 @@ def create_apply_patch_tool(
         new_sha256 = _sha256_bytes(updated_data)
 
         return {
-            "path": str(target.relative_to(workspace_root)),
+            "path": workspace.relative_path(target),
             "previous_sha256": (previous_sha256),
             "sha256": new_sha256,
             "old_chars": len(old_text),
