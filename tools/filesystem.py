@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
-from tools.base import Tool,tool
+from tools.base import Tool, tool
 
 MAX_SEARCH_RESULTS = 20
 MAX_SEARCH_FILE_BYTES = 1_000_000

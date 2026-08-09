@@ -1,40 +1,51 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from openai.types.responses import (
-    ResponseInputParam,
-)
 
-from agent.compaction import (
-    ContextCompactor,
-)
-from agent.context import (
-    ContextManager,
-    TokenCounter,
-)
+from agent.compaction import ContextCompactor
+from agent.context import ContextManager
 from agent.runtime import AgentRuntime
 from tools.filesystem import FILESYSTEM_TOOLS
 from tools.registry import ToolRegistry
+from tools.shell import (
+    create_run_command_tool,
+)
 from tools.token import create_token_counter
 
 INSTRUCTIONS = """
 You are MyAgent, a coding assistant.
+
 Use the available tools when you need information
 from the local environment.
+
 Do not guess file contents.
 Read files when their contents are needed.
+
+Use run_command when you need to inspect repository
+state or run tests, linters, or static checks.
+
+Do not attempt destructive commands, network access,
+or changes outside the workspace.
 """
 
-
-def create_tool_registry() -> ToolRegistry:
+def create_tool_registry(
+    *,
+    workspace_root: Path,
+) -> ToolRegistry:
     registry = ToolRegistry()
 
     for tool in FILESYSTEM_TOOLS:
         registry.register(tool)
 
-    return registry
+    registry.register(
+        create_run_command_tool(
+            workspace_root=workspace_root,
+        )
+    )
 
+    return registry
 
 def main() -> None:
     load_dotenv()
@@ -73,7 +84,15 @@ def main() -> None:
         "gpt-5.6-luna",
     )
 
-    registry = create_tool_registry()
+    workspace_root = (
+        Path(__file__)
+        .resolve()
+        .parent
+    )
+
+    registry = create_tool_registry(
+        workspace_root=workspace_root,
+    )
 
     token_counter = create_token_counter(
         instructions=INSTRUCTIONS,
