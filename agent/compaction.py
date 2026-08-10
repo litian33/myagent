@@ -2,6 +2,7 @@ import json
 
 from openai import OpenAI
 
+from agent.context import ContextCompactionError
 from agent.state import (
     AgentState,
     HistoryBlock,
@@ -71,7 +72,7 @@ class ContextCompactor:
         summary = response.output_text.strip()
 
         if not summary:
-            raise RuntimeError(
+            raise ContextCompactionError(
                 "Compaction model returned "
                 "an empty summary"
             )

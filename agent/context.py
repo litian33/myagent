@@ -21,6 +21,10 @@ class ContextBudgetExceeded(
 ):
     pass
 
+class ContextCompactionError(
+    RuntimeError
+):
+    pass
 
 @dataclass(
     frozen=True,

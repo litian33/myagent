@@ -1,5 +1,6 @@
 import json
 
+import openai
 from openai import OpenAI
 from openai.types.responses import (
     ResponseFunctionToolCall,
@@ -9,7 +10,13 @@ from openai.types.responses import (
 from agent.compaction import (
     ContextCompactor,
 )
-from agent.context import ContextManager
+from agent.context import ContextBudgetExceeded, ContextCompactionError, ContextManager
+from agent.errors import (
+    AgentExecutionError,
+    AgentRunError,
+    ContextExecutionError,
+    ModelInvocationError,
+)
 from agent.state import AgentRunResult, AgentState
 from policy.approval import (
     ApprovalHandler,
@@ -48,13 +55,10 @@ class AgentRuntime:
         self._policy = policy
         self._approval = approval
 
-    def run(
+    def _run(
         self,
-        task: str,
+        state: AgentState,
     ) -> AgentRunResult:
-        state = AgentState.create(task)
-        state.start()
-
         for step in range(
             1,
             self._max_steps + 1,
@@ -75,14 +79,7 @@ class AgentRuntime:
                 f"{context.compacted_blocks}"
             )
 
-            response = self._client.responses.create(
-                model=self._model,
-                instructions=self._instructions,
-                input=context.input,
-                tools=self._tools.schemas(),
-                max_output_tokens=(self._max_output_tokens),
-                truncation="disabled",
-            )
+            response = self._call_model(context=context.input)
 
             tool_calls: list[ResponseFunctionToolCall] = []
 
@@ -126,22 +123,80 @@ class AgentRuntime:
         # raise RuntimeError(f"Agent exceeded maximum steps: {self._max_steps}")
         return AgentRunResult(status=state.status, output=None)
 
+    def run(
+        self,
+        task: str,
+    ) -> AgentRunResult:
+        state = AgentState.create(task)
+        state.start()
+        try:
+            return self._run(state)
+        except AgentExecutionError as exc:
+            state.fail()
+            return AgentRunResult(
+                status=state.status,
+                output=None,
+                error=AgentRunError(
+                    kind=exc.kind,
+                    message=str(exc),
+                    retryable=exc.retryable,
+                ),
+            )
+        except Exception:
+            state.fail()
+            raise
+
+    def _call_model(
+        self,
+        *,
+        context: ResponseInputParam,
+    ):
+        try:
+            return self._client.responses.create(
+                model=self._model,
+                instructions=self._instructions,
+                input=context,
+                tools=self._tools.schemas(),
+                max_output_tokens=(self._max_output_tokens),
+                truncation="disabled",
+            )
+
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.RateLimitError,
+            openai.InternalServerError,
+        ) as exc:
+            raise ModelInvocationError(
+                str(exc),
+                retryable=True,
+            ) from exc
+
+        except openai.APIError as exc:
+            raise ModelInvocationError(
+                str(exc),
+                retryable=False,
+            ) from exc
+
     def _build_context(
         self,
         state: AgentState,
     ):
-        while True:
-            context = self._context.build(state)
+        try:
+            while True:
+                context = self._context.build(state)
 
-            if context.pending_compaction_blocks == 0:
-                return context
+                if context.pending_compaction_blocks == 0:
+                    return context
 
-            print(f"[compaction] blocks={context.pending_compaction_blocks}")
+                print(f"[compaction] blocks={context.pending_compaction_blocks}")
 
-            self._compactor.compact(
-                state,
-                block_count=(context.pending_compaction_blocks),
-            )
+                self._compactor.compact(
+                    state,
+                    block_count=(context.pending_compaction_blocks),
+                )
+        except (ContextBudgetExceeded, ContextCompactionError) as exc:
+            raise ContextExecutionError(str(exc)) from exc
 
     def _execute_tool_call(
         self,
@@ -191,9 +246,7 @@ class AgentRuntime:
             if not approved:
                 return json.dumps(
                     {
-                        "error": (
-                            "Tool execution was not approved by the user"
-                        ),
+                        "error": ("Tool execution was not approved by the user"),
                         "tool": tool.name,
                         "capability": (tool.capability.value),
                         "policy_decision": ("denied_by_user"),

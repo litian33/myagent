@@ -13,6 +13,7 @@ from execution.bubblewrap import (
 )
 from execution.command import (
     CommandExecutor,
+    LocalCommandExecutor,
 )
 from policy.approval import (
     CliApprovalHandler,
@@ -127,43 +128,43 @@ def create_command_executor(
     *,
     workspace: Workspace,
 ) -> CommandExecutor:
-    config = BubblewrapConfig(
-        runtime_roots=(Path("/usr/local/go"),),
-        extra_path_entries=("/usr/local/go/bin",),
-    )
+    # config = BubblewrapConfig(
+    #     runtime_roots=(Path("/usr/local/go"),),
+    #     extra_path_entries=("/usr/local/go/bin",),
+    # )
 
-    try:
-        executor = BubblewrapCommandExecutor(
-            workspace=workspace,
-            config=config,
-        )
+    # try:
+    #     executor = BubblewrapCommandExecutor(
+    #         workspace=workspace,
+    #         config=config,
+    #     )
 
-        executor.verify()
+    #     executor.verify()
 
-        return executor
+    #     return executor
 
-    except (RuntimeError, ValueError, OSError) as exc:
-        require_sandbox = os.getenv(
-            "MYAGENT_REQUIRE_SANDBOX",
-            "",
-        ).strip().lower()
+    # except (RuntimeError, ValueError, OSError) as exc:
+    #     require_sandbox = os.getenv(
+    #         "MYAGENT_REQUIRE_SANDBOX",
+    #         "",
+    #     ).strip().lower()
 
-        if require_sandbox in {
-            "1",
-            "true",
-            "yes",
-        }:
-            raise
+    #     if require_sandbox in {
+    #         "1",
+    #         "true",
+    #         "yes",
+    #     }:
+    #         raise
 
-        print(
-            "[warning] bubblewrap sandbox unavailable: "
-            f"{exc}\n"
-            "The sandbox requires Linux with bubblewrap installed "
-            "(e.g. 'sudo apt install bubblewrap'). "
-        )
+    #     print(
+    #         "[warning] bubblewrap sandbox unavailable: "
+    #         f"{exc}\n"
+    #         "The sandbox requires Linux with bubblewrap installed "
+    #         "(e.g. 'sudo apt install bubblewrap'). "
+    #     )
 
-        raise
-        # return LocalCommandExecutor()
+    #     raise
+    return LocalCommandExecutor()
 
 
 def main() -> None:
@@ -256,6 +257,14 @@ def main() -> None:
     if result.output is not None:
         print("[final answer]")
         print(result.output)
+
+    if result.error is not None:
+        print(
+            "[error] "
+            f"kind={result.error.kind.value}, "
+            f"retryable={result.error.retryable}"
+        )
+        print(result.error.message)
 
 
 if __name__ == "__main__":

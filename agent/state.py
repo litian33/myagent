@@ -8,6 +8,8 @@ from openai.types.responses import (
     ResponseOutputItem,
 )
 
+from agent.errors import AgentRunError
+
 
 class AgentStatus(str, Enum):
     CREATED = "created"
@@ -23,6 +25,7 @@ class AgentStatus(str, Enum):
 class AgentRunResult:
     status: AgentStatus
     output: str | None
+    error: AgentRunError | None = None
 
 @dataclass(slots=True)
 class HistoryBlock:
@@ -92,6 +95,15 @@ class AgentState:
             )
 
         self.status = AgentStatus.MAX_STEPS_REACHED
+
+    def fail(self) -> None:
+        if self.status != AgentStatus.RUNNING:
+            raise RuntimeError(
+                "Cannot fail agent from status: "
+                f"{self.status.value}"
+            )
+
+        self.status = AgentStatus.FAILED
 
     def record_step(
         self,

@@ -186,12 +186,12 @@ P4.6 Error Boundary
   - [x] MAX_STEPS_REACHED
   - [x] `WAITING_APPROVAL` 与已有 HITL 的关系
   - [x] `CANCELLED` 先理解概念
-- [ ] **P4.6 Error Boundary**
-  - [ ] Model Error
-  - [ ] Tool Error
-  - [ ] Context Error
-  - [ ] Runtime Error
-  - [ ] retryable / non-retryable 最小分类
+- [x] **P4.6 Error Boundary**
+  - [x] Model Error
+  - [x] Tool Error
+  - [x] Context Error
+  - [x] Runtime Error
+  - [x] retryable / non-retryable 最小分类
 
 ### Phase 4 Exit Review
 
