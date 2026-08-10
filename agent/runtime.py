@@ -1,6 +1,7 @@
 import json
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 
 import openai
 from openai import OpenAI
@@ -199,10 +200,25 @@ class AgentRuntime:
         self,
         state: AgentState,
     ) -> ContextSnapshot:
-        context = self._context.build(state)
-        print(f"[compaction] blocks={context.pending_compaction_blocks}")
-        self._compact_context(state, block_count=(context.pending_compaction_blocks))
-        return context
+        try:
+            while True:
+                context = self._context.build(state)
+
+                if context.pending_compaction_blocks == 0:
+                    return context
+
+                print(f"[compaction] blocks={context.pending_compaction_blocks}")
+
+                self._compact_context(
+                    state,
+                    block_count=(context.pending_compaction_blocks),
+                )
+
+        except (
+            ContextBudgetExceeded,
+            ContextCompactionError,
+        ) as exc:
+            raise ContextExecutionError(str(exc)) from exc
 
     @handle_openai_errors
     def _compact_context(

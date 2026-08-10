@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -128,42 +129,47 @@ def create_command_executor(
     *,
     workspace: Workspace,
 ) -> CommandExecutor:
-    # config = BubblewrapConfig(
-    #     runtime_roots=(Path("/usr/local/go"),),
-    #     extra_path_entries=("/usr/local/go/bin",),
-    # )
+    if sys.platform.startswith("linux"):
+        config = BubblewrapConfig(
+            runtime_roots=(Path("/usr/local/go"),),
+            extra_path_entries=("/usr/local/go/bin",),
+        )
 
-    # try:
-    #     executor = BubblewrapCommandExecutor(
-    #         workspace=workspace,
-    #         config=config,
-    #     )
+        try:
+            executor = BubblewrapCommandExecutor(
+                workspace=workspace,
+                config=config,
+            )
 
-    #     executor.verify()
+            executor.verify()
 
-    #     return executor
+            return executor
 
-    # except (RuntimeError, ValueError, OSError) as exc:
-    #     require_sandbox = os.getenv(
-    #         "MYAGENT_REQUIRE_SANDBOX",
-    #         "",
-    #     ).strip().lower()
+        except (RuntimeError, ValueError, OSError) as exc:
+            require_sandbox = (
+                os.getenv(
+                    "MYAGENT_REQUIRE_SANDBOX",
+                    "",
+                )
+                .strip()
+                .lower()
+            )
 
-    #     if require_sandbox in {
-    #         "1",
-    #         "true",
-    #         "yes",
-    #     }:
-    #         raise
+            if require_sandbox in {
+                "1",
+                "true",
+                "yes",
+            }:
+                raise
 
-    #     print(
-    #         "[warning] bubblewrap sandbox unavailable: "
-    #         f"{exc}\n"
-    #         "The sandbox requires Linux with bubblewrap installed "
-    #         "(e.g. 'sudo apt install bubblewrap'). "
-    #     )
+            print(
+                "[warning] bubblewrap sandbox unavailable: "
+                f"{exc}\n"
+                "The sandbox requires Linux with bubblewrap installed "
+                "(e.g. 'sudo apt install bubblewrap'). "
+            )
 
-    #     raise
+            raise
     return LocalCommandExecutor()
 
 
