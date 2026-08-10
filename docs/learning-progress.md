@@ -195,9 +195,9 @@ P4.6 Error Boundary
 
 ### Phase 4 Exit Review
 
-- [ ] 能准确解释 Agent / AgentRuntime / AgentState / History / Context / Compaction
-- [ ] Runtime 对任务结束原因有明确状态
-- [ ] 主要错误边界清晰，不依赖到处 `try/except` 猜测状态
+- [x] 能准确解释 Agent / AgentRuntime / AgentState / History / Context / Compaction
+- [x] Runtime 对任务结束原因有明确状态
+- [x] 主要错误边界清晰，不依赖到处 `try/except` 猜测状态
 
 **完成后立即进入 Phase 5，不继续深入 Context/Sandbox。**
 
