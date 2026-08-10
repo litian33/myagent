@@ -1,4 +1,6 @@
 import json
+from functools import wraps
+from typing import Callable, ParamSpec, TypeVar
 
 import openai
 from openai import OpenAI
@@ -10,7 +12,12 @@ from openai.types.responses import (
 from agent.compaction import (
     ContextCompactor,
 )
-from agent.context import ContextBudgetExceeded, ContextCompactionError, ContextManager
+from agent.context import (
+    ContextBudgetExceeded,
+    ContextCompactionError,
+    ContextManager,
+    ContextSnapshot,
+)
 from agent.errors import (
     AgentExecutionError,
     AgentRunError,
@@ -27,6 +34,33 @@ from policy.model import (
     PolicyDecision,
 )
 from tools.registry import ToolRegistry
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def handle_openai_errors(func: Callable[P, R]) -> Callable[P, R]:
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return func(*args, **kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.RateLimitError,
+            openai.InternalServerError,
+        ) as exc:
+            raise ModelInvocationError(
+                str(exc),
+                retryable=True,
+            ) from exc
+        except openai.APIError as exc:
+            raise ModelInvocationError(
+                str(exc),
+                retryable=False,
+            ) from exc
+
+    return wrapper
 
 
 class AgentRuntime:
@@ -146,57 +180,41 @@ class AgentRuntime:
             state.fail()
             raise
 
+    @handle_openai_errors
     def _call_model(
         self,
         *,
         context: ResponseInputParam,
     ):
-        try:
-            return self._client.responses.create(
-                model=self._model,
-                instructions=self._instructions,
-                input=context,
-                tools=self._tools.schemas(),
-                max_output_tokens=(self._max_output_tokens),
-                truncation="disabled",
-            )
-
-        except (
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-            openai.RateLimitError,
-            openai.InternalServerError,
-        ) as exc:
-            raise ModelInvocationError(
-                str(exc),
-                retryable=True,
-            ) from exc
-
-        except openai.APIError as exc:
-            raise ModelInvocationError(
-                str(exc),
-                retryable=False,
-            ) from exc
+        return self._client.responses.create(
+            model=self._model,
+            instructions=self._instructions,
+            input=context,
+            tools=self._tools.schemas(),
+            max_output_tokens=(self._max_output_tokens),
+            truncation="disabled",
+        )
 
     def _build_context(
         self,
         state: AgentState,
-    ):
-        try:
-            while True:
-                context = self._context.build(state)
+    ) -> ContextSnapshot:
+        context = self._context.build(state)
+        print(f"[compaction] blocks={context.pending_compaction_blocks}")
+        self._compact_context(state, block_count=(context.pending_compaction_blocks))
+        return context
 
-                if context.pending_compaction_blocks == 0:
-                    return context
-
-                print(f"[compaction] blocks={context.pending_compaction_blocks}")
-
-                self._compactor.compact(
-                    state,
-                    block_count=(context.pending_compaction_blocks),
-                )
-        except (ContextBudgetExceeded, ContextCompactionError) as exc:
-            raise ContextExecutionError(str(exc)) from exc
+    @handle_openai_errors
+    def _compact_context(
+        self,
+        state: AgentState,
+        *,
+        block_count: int,
+    ) -> None:
+        self._compactor.compact(
+            state,
+            block_count=block_count,
+        )
 
     def _execute_tool_call(
         self,
