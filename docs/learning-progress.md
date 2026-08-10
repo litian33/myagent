@@ -178,14 +178,14 @@ P4.6 Error Boundary
   - [x] Incremental Compaction
   - [x] Build → Compact → Rebuild
   - [x] 能区分 Raw History / Compaction / Context
-- [ ] **P4.5 Runtime Lifecycle ← 当前下一课**
-  - [ ] CREATED
-  - [ ] RUNNING
-  - [ ] COMPLETED
-  - [ ] FAILED
-  - [ ] MAX_STEPS_REACHED
-  - [ ] `WAITING_APPROVAL` 与已有 HITL 的关系
-  - [ ] `CANCELLED` 先理解概念
+- [x] **P4.5 Runtime Lifecycle**
+  - [x] CREATED
+  - [x] RUNNING
+  - [x] COMPLETED
+  - [x] FAILED
+  - [x] MAX_STEPS_REACHED
+  - [x] `WAITING_APPROVAL` 与已有 HITL 的关系
+  - [x] `CANCELLED` 先理解概念
 - [ ] **P4.6 Error Boundary**
   - [ ] Model Error
   - [ ] Tool Error

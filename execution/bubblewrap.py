@@ -8,7 +8,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-
 from execution.command import (
     CommandExecutionResult,
     CommandRequest,
@@ -325,8 +324,7 @@ class BubblewrapCommandExecutor:
                     target = None
 
                 if target is not None and any(
-                    target.is_relative_to(root)
-                    for root in venv_roots
+                    target.is_relative_to(root) for root in venv_roots
                 ):
                     #
                     # Symlink into an explicitly exposed runtime
@@ -516,34 +514,15 @@ class BubblewrapCommandExecutor:
     def verify(
         self,
     ) -> None:
-        request = CommandRequest(
-            argv=("true",),
-            cwd=self._workspace.root,
-            timeout_seconds=5,
-        )
-
-        executable = self._resolve_executable("true")
-
-        with tempfile.NamedTemporaryFile() as empty_secret_file:
-            arguments = self._build_arguments(
-                request=request,
-                executable=executable,
-                empty_secret_file=(Path(empty_secret_file.name)),
+        result = self.execute(
+            CommandRequest(
+                argv=("true",),
+                cwd=self._workspace.root,
+                timeout_seconds=5,
             )
-
-        probe = subprocess.run(
-            arguments,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            env={
-                "PATH": "/usr/bin:/bin",
-            },
         )
 
-        if probe.returncode != 0:
+        if result.timed_out or result.exit_code != 0:
             raise RuntimeError(
-                f"Bubblewrap sandbox is not available:\n{probe.stderr.strip()}"
+                f"Bubblewrap sandbox is not available:\n{result.stderr.strip()}"
             )

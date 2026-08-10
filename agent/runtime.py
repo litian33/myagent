@@ -10,7 +10,7 @@ from agent.compaction import (
     ContextCompactor,
 )
 from agent.context import ContextManager
-from agent.state import AgentState
+from agent.state import AgentRunResult, AgentState
 from policy.approval import (
     ApprovalHandler,
 )
@@ -51,8 +51,9 @@ class AgentRuntime:
     def run(
         self,
         task: str,
-    ) -> str:
+    ) -> AgentRunResult:
         state = AgentState.create(task)
+        state.start()
 
         for step in range(
             1,
@@ -95,7 +96,9 @@ class AgentRuntime:
                     [],
                 )
 
-                return response.output_text
+                state.complete()
+
+                return AgentRunResult(status=state.status, output=response.output_text)
 
             tool_outputs: ResponseInputParam = []
 
@@ -119,7 +122,9 @@ class AgentRuntime:
                 tool_outputs,
             )
 
-        raise RuntimeError(f"Agent exceeded maximum steps: {self._max_steps}")
+        state.reach_max_steps()
+        # raise RuntimeError(f"Agent exceeded maximum steps: {self._max_steps}")
+        return AgentRunResult(status=state.status, output=None)
 
     def _build_context(
         self,

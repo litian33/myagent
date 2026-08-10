@@ -13,7 +13,6 @@ from execution.bubblewrap import (
 )
 from execution.command import (
     CommandExecutor,
-    LocalCommandExecutor,
 )
 from policy.approval import (
     CliApprovalHandler,
@@ -161,10 +160,10 @@ def create_command_executor(
             f"{exc}\n"
             "The sandbox requires Linux with bubblewrap installed "
             "(e.g. 'sudo apt install bubblewrap'). "
-            "Falling back to the local command executor without a sandbox."
         )
 
-        return LocalCommandExecutor()
+        raise
+        # return LocalCommandExecutor()
 
 
 def main() -> None:
@@ -249,10 +248,14 @@ def main() -> None:
     if not task:
         return
 
-    answer = agent.run(task)
+    result = agent.run(task)
 
-    print("\n[final answer]")
-    print(answer)
+    print()
+    print(f"[status] {result.status.value}")
+
+    if result.output is not None:
+        print("[final answer]")
+        print(result.output)
 
 
 if __name__ == "__main__":

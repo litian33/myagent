@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import cast
 
 from openai.types.responses import (
@@ -7,6 +8,21 @@ from openai.types.responses import (
     ResponseOutputItem,
 )
 
+
+class AgentStatus(str, Enum):
+    CREATED = "created"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    MAX_STEPS_REACHED = "max_steps_reached"
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class AgentRunResult:
+    status: AgentStatus
+    output: str | None
 
 @dataclass(slots=True)
 class HistoryBlock:
@@ -33,6 +49,8 @@ class AgentState:
 
     step: int = 0
 
+    status: AgentStatus = AgentStatus.CREATED
+
     @classmethod
     def create(
         cls,
@@ -49,6 +67,31 @@ class AgentState:
             task=task,
             initial_input=initial_input,
         )
+
+    def start(self) -> None:
+        if self.status != AgentStatus.CREATED:
+            raise RuntimeError(
+                f"Cannot start agent from status: {self.status.value}"
+            )
+
+        self.status = AgentStatus.RUNNING
+
+    def complete(self) -> None:
+        if self.status != AgentStatus.RUNNING:
+            raise RuntimeError(
+                f"Cannot complete agent from status: {self.status.value}"
+            )
+
+        self.status = AgentStatus.COMPLETED
+
+    def reach_max_steps(self) -> None:
+        if self.status != AgentStatus.RUNNING:
+            raise RuntimeError(
+                "Cannot mark max steps from status: "
+                f"{self.status.value}"
+            )
+
+        self.status = AgentStatus.MAX_STEPS_REACHED
 
     def record_step(
         self,
