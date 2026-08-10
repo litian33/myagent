@@ -205,11 +205,11 @@ P4.6 Error Boundary
 
 # 7. Phase 5：Planning
 - [x] **P5.1 Reactive Agent 与 ReAct**
-- [ ] **P5.2 Goal、Plan、Todo、Action 的区别**
-- [ ] **P5.3 最小 Planner**
-  - [ ] Plan
-  - [ ] PlanStep
-  - [ ] PlanStatus
+- [x] **P5.2 Goal、Plan、Todo、Action 的区别**
+- [x] **P5.3 最小 Planner**
+  - [x] Plan
+  - [x] PlanStep
+  - [x] PlanStatus
 - [ ] **P5.4 Executor**
 - [ ] **P5.5 Progress Update**
 - [ ] **P5.6 Replanning**
