@@ -7,6 +7,7 @@ from tools.edit import (
     create_apply_patch_tool,
     create_write_file_tool,
 )
+from tools.workspace import Workspace
 
 
 def sha256(
@@ -19,7 +20,7 @@ def test_create_file(
     tmp_path,
 ) -> None:
     tool = create_write_file_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     result = tool.handler(
@@ -41,7 +42,7 @@ def test_replace_existing_file(
     target.write_text("before\n")
 
     tool = create_write_file_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     result = tool.handler(
@@ -63,7 +64,7 @@ def test_reject_stale_write(
     target.write_text("current\n")
 
     tool = create_write_file_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     with pytest.raises(
@@ -83,7 +84,7 @@ def test_reject_parent_escape(
     tmp_path,
 ) -> None:
     tool = create_write_file_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     with pytest.raises(
@@ -104,7 +105,7 @@ def test_reject_git_directory(
     git_dir.mkdir()
 
     tool = create_write_file_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     with pytest.raises(
@@ -174,7 +175,7 @@ def test_apply_patch(
     )
 
     tool = create_apply_patch_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     result = tool.handler(
@@ -202,7 +203,7 @@ def test_apply_patch_rejects_ambiguous_text(
     )
 
     tool = create_apply_patch_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     with pytest.raises(
@@ -228,7 +229,7 @@ def test_apply_patch_rejects_stale_version(
     )
 
     tool = create_apply_patch_tool(
-        workspace_root=tmp_path,
+        workspace=Workspace(tmp_path),
     )
 
     with pytest.raises(
