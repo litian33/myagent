@@ -158,3 +158,56 @@ def test_executor_does_not_skip_failed_step() -> None:
         match="failed step",
     ):
         executor.start_next_step(state)
+
+
+def test_executor_can_continue_after_replan() -> None:
+    state = AgentState.create("test")
+
+    state.attach_plan(
+        Plan.create(
+            [
+                "Fix implementation",
+                "Run tests",
+            ]
+        )
+    )
+
+    new_plans = ["Try another file", "Run another tests"]
+
+    executor = PlanExecutor()
+
+    executor.start_next_step(state)
+    executor.complete_current_step(state, "Fixed")
+
+    with pytest.raises(
+        RuntimeError,
+        match="requires a failed step",
+    ):
+        executor.replan(state, new_plans)
+
+    executor.start_next_step(state)
+    with pytest.raises(
+        RuntimeError,
+        match="in progress",
+    ):
+        executor.replan(state, new_plans)
+
+    step = executor.fail_current_step(state, result="Unable to complete")
+
+    with pytest.raises(
+        ValueError,
+        match="at least one step",
+    ):
+        executor.replan(state, [])
+
+    executor.replan(state, new_plans)
+
+    assert step.status == PlanStepStatus.SUPERSEDED
+
+    executor.start_next_step(state)
+    executor.complete_current_step(state, "finished")
+    executor.start_next_step(state)
+    executor.complete_current_step(state, "finished")
+
+    assert state.plan is not None
+    assert state.plan.is_completed is True

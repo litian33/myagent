@@ -111,8 +111,8 @@ def test_plan_is_completed_when_all_steps_complete() -> None:
 
     assert plan.is_completed is True
 
-def test_plan_exposes_current_step(
-) -> None:
+
+def test_plan_exposes_current_step() -> None:
     plan = Plan.create(
         [
             "Locate root cause",
@@ -124,7 +124,36 @@ def test_plan_exposes_current_step(
 
     plan.steps[0].start()
 
-    assert (
-        plan.current_step
-        is plan.steps[0]
+    assert plan.current_step is plan.steps[0]
+
+
+def test_replan_preserves_past_and_replaces_future() -> None:
+    plan = Plan.create(
+        [
+            "Locate root cause",
+            "Fix implementation",
+            "Add tests",
+        ]
     )
+
+    plan.steps[0].start()
+    plan.steps[0].complete("Root cause located")
+
+    plan.steps[1].start()
+    plan.steps[1].fail("Wrong implementation path")
+
+    new_steps = plan.replan(
+        [
+            "Inspect session service",
+            "Fix session invalidation",
+        ]
+    )
+
+    assert plan.steps[0].status == PlanStepStatus.COMPLETED
+
+    assert plan.steps[1].status == PlanStepStatus.SUPERSEDED
+
+    assert plan.steps[2].status == PlanStepStatus.SUPERSEDED
+
+    assert new_steps[0].id == "step-4"
+    assert new_steps[1].id == "step-5"

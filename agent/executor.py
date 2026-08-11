@@ -106,3 +106,12 @@ class PlanExecutor:
             )
 
         raise AssertionError(f"Unsupported progress status: {update.status}")
+
+    def replan(
+        self,
+        state: AgentState,
+        descriptions: list[str],
+    ) -> list[PlanStep]:
+        plan = self._require_plan(state)
+
+        return plan.replan(descriptions)
