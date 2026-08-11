@@ -8,6 +8,9 @@ from openai.types.responses import (
     ResponseOutputItem,
 )
 
+from agent.completion import (
+    CompletionCriteria,
+)
 from agent.errors import AgentRunError
 from agent.planning import Plan
 
@@ -48,6 +51,8 @@ class AgentState:
     initial_input: ResponseInputParam
 
     plan: Plan | None = None
+
+    completion_criteria: CompletionCriteria | None = None
 
     history_blocks: list[HistoryBlock] = field(default_factory=list)
 
@@ -189,3 +194,12 @@ class AgentState:
             raise RuntimeError("Agent already has a plan")
 
         self.plan = plan
+
+    def attach_completion_criteria(
+        self,
+        criteria: CompletionCriteria,
+    ) -> None:
+        if self.completion_criteria is not None:
+            raise RuntimeError("Agent already has completion criteria")
+
+        self.completion_criteria = criteria

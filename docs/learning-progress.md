@@ -213,7 +213,7 @@ P4.6 Error Boundary
 - [x] **P5.4 Executor**
 - [x] **P5.5 Progress Update**
 - [x] **P5.6 Replanning**
-- [ ] **P5.7 Completion Criteria**
+- [x] **P5.7 Completion Criteria**
 - [ ] **P5.8 Phase 实验：完整修复任务**
 
 ### Phase 5 Exit Review
