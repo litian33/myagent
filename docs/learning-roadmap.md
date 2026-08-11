@@ -527,7 +527,7 @@ Goal
 ```text
 Plan
 PlanStep
-PlanStatus
+PlanStepStatus
 ```
 
 使 Agent 能先生成可检查的任务计划。

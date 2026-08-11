@@ -209,7 +209,7 @@ P4.6 Error Boundary
 - [x] **P5.3 最小 Planner**
   - [x] Plan
   - [x] PlanStep
-  - [x] PlanStatus
+  - [x] PlanStepStatus
 - [ ] **P5.4 Executor**
 - [ ] **P5.5 Progress Update**
 - [ ] **P5.6 Replanning**

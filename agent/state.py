@@ -9,6 +9,7 @@ from openai.types.responses import (
 )
 
 from agent.errors import AgentRunError
+from agent.planning import Plan
 
 
 class AgentStatus(str, Enum):
@@ -18,6 +19,7 @@ class AgentStatus(str, Enum):
     FAILED = "failed"
     MAX_STEPS_REACHED = "max_steps_reached"
 
+
 @dataclass(
     frozen=True,
     slots=True,
@@ -26,6 +28,7 @@ class AgentRunResult:
     status: AgentStatus
     output: str | None
     error: AgentRunError | None = None
+
 
 @dataclass(slots=True)
 class HistoryBlock:
@@ -44,9 +47,9 @@ class AgentState:
 
     initial_input: ResponseInputParam
 
-    history_blocks: list[HistoryBlock] = field(
-        default_factory=list
-    )
+    plan: Plan | None = None
+
+    history_blocks: list[HistoryBlock] = field(default_factory=list)
 
     compaction: CompactionState | None = None
 
@@ -73,9 +76,7 @@ class AgentState:
 
     def start(self) -> None:
         if self.status != AgentStatus.CREATED:
-            raise RuntimeError(
-                f"Cannot start agent from status: {self.status.value}"
-            )
+            raise RuntimeError(f"Cannot start agent from status: {self.status.value}")
 
         self.status = AgentStatus.RUNNING
 
@@ -90,18 +91,14 @@ class AgentState:
     def reach_max_steps(self) -> None:
         if self.status != AgentStatus.RUNNING:
             raise RuntimeError(
-                "Cannot mark max steps from status: "
-                f"{self.status.value}"
+                f"Cannot mark max steps from status: {self.status.value}"
             )
 
         self.status = AgentStatus.MAX_STEPS_REACHED
 
     def fail(self) -> None:
         if self.status != AgentStatus.RUNNING:
-            raise RuntimeError(
-                "Cannot fail agent from status: "
-                f"{self.status.value}"
-            )
+            raise RuntimeError(f"Cannot fail agent from status: {self.status.value}")
 
         self.status = AgentStatus.FAILED
 
@@ -115,9 +112,7 @@ class AgentState:
         for item in model_output:
             input_item = cast(
                 ResponseInputItemParam,
-                item.model_dump(
-                    exclude_unset=True
-                ),
+                item.model_dump(exclude_unset=True),
             )
 
             items.append(input_item)
@@ -141,32 +136,22 @@ class AgentState:
     def active_history_blocks(
         self,
     ) -> list[HistoryBlock]:
-        return self.history_blocks[
-            self.compacted_block_count:
-        ]
+        return self.history_blocks[self.compacted_block_count :]
 
     def blocks_for_compaction(
         self,
         count: int,
     ) -> list[HistoryBlock]:
         if count <= 0:
-            raise ValueError(
-                "Compaction block count "
-                "must be positive"
-            )
+            raise ValueError("Compaction block count must be positive")
 
         start = self.compacted_block_count
         end = start + count
 
         if end > len(self.history_blocks):
-            raise ValueError(
-                "Compaction exceeds "
-                "available history blocks"
-            )
+            raise ValueError("Compaction exceeds available history blocks")
 
-        return self.history_blocks[
-            start:end
-        ]
+        return self.history_blocks[start:end]
 
     def apply_compaction(
         self,
@@ -175,23 +160,12 @@ class AgentState:
         block_count: int,
     ) -> None:
         if not summary.strip():
-            raise ValueError(
-                "Compaction summary cannot "
-                "be empty"
-            )
+            raise ValueError("Compaction summary cannot be empty")
 
-        compacted_blocks = (
-            self.compacted_block_count
-            + block_count
-        )
+        compacted_blocks = self.compacted_block_count + block_count
 
-        if compacted_blocks > len(
-            self.history_blocks
-        ):
-            raise ValueError(
-                "Compaction exceeds "
-                "history size"
-            )
+        if compacted_blocks > len(self.history_blocks):
+            raise ValueError("Compaction exceeds history size")
 
         self.compaction = CompactionState(
             summary=summary,
@@ -200,11 +174,18 @@ class AgentState:
 
     @property
     def history(self) -> ResponseInputParam:
-        items: ResponseInputParam = [
-            *self.initial_input
-        ]
+        items: ResponseInputParam = [*self.initial_input]
 
         for block in self.history_blocks:
             items.extend(block.items)
 
         return items
+
+    def attach_plan(
+        self,
+        plan: Plan,
+    ) -> None:
+        if self.plan is not None:
+            raise RuntimeError("Agent already has a plan")
+
+        self.plan = plan

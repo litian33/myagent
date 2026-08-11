@@ -1,3 +1,5 @@
+import pytest
+
 from agent.planning import (
     Plan,
     PlanStepStatus,
@@ -19,9 +21,6 @@ def test_create_plan() -> None:
     assert plan.steps[0].description == "Locate root cause"
 
     assert all(step.status == PlanStepStatus.PENDING for step in plan.steps)
-
-
-import pytest
 
 
 def test_plan_cannot_be_empty() -> None:
