@@ -268,7 +268,7 @@ class AgentRuntime:
                 self._start_next_plan_step_if_ready(state)
                 continue
 
-            for tool_call in tool_calls:
+            for tool_call in environment_calls:
                 print(f"[tool call] {tool_call.name}({tool_call.arguments})")
 
                 result = self._execute_tool_call(tool_call)

@@ -3,14 +3,12 @@ from typing import Any
 
 import tiktoken
 from openai import OpenAI
-from openai.types.responses import ResponseInputParam
-
-from agent.context import TokenCounter
 from openai.types.responses import (
     FunctionToolParam,
     ResponseInputParam,
 )
 
+from agent.context import TokenCounter
 
 TOKEN_ESTIMATE_MARGIN = 1.10
 
