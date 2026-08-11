@@ -35,9 +35,12 @@ class PlanStep:
                 f"Cannot complete plan step from status: {self.status.value}"
             )
 
+        result = result.strip()
+
         if not result:
             raise ValueError("Completed plan step must have a result")
 
+        self.result = result
         self.result = result
         self.status = PlanStepStatus.COMPLETED
 
@@ -50,8 +53,10 @@ class PlanStep:
                 f"Cannot fail plan step from status: {self.status.value}"
             )
 
+        result = result.strip()
+
         if not result:
-            raise ValueError("Completed plan step must have a result")
+            raise ValueError("Failed plan step must have a result")
 
         self.result = result
         self.status = PlanStepStatus.FAILED

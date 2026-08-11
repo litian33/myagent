@@ -75,7 +75,7 @@ def test_executor_advances_sequentially() -> None:
 
     first = executor.start_next_step(state)
 
-    executor.complete_current_step(state)
+    executor.complete_current_step(state, result="Root cause located")
 
     second = executor.start_next_step(state)
 
@@ -127,7 +127,7 @@ def test_failed_plan_step_does_not_fail_agent() -> None:
 
     executor.start_next_step(state)
 
-    executor.fail_current_step(state)
+    executor.fail_current_step(state, result="Unable to complete")
 
     assert state.plan is not None
 
@@ -151,7 +151,7 @@ def test_executor_does_not_skip_failed_step() -> None:
     executor = PlanExecutor()
 
     executor.start_next_step(state)
-    executor.fail_current_step(state)
+    executor.fail_current_step(state, result="Unable to complete")
 
     with pytest.raises(
         RuntimeError,
