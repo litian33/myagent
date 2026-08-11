@@ -59,7 +59,7 @@ def test_plan_step_lifecycle() -> None:
 
     assert step.status == PlanStepStatus.IN_PROGRESS
 
-    step.complete()
+    step.complete("Root cause located")
 
     assert step.status == PlanStepStatus.COMPLETED
 
@@ -77,7 +77,7 @@ def test_pending_step_cannot_complete() -> None:
         RuntimeError,
         match="Cannot complete",
     ):
-        step.complete()
+        step.complete("Root cause located")
 
 
 def test_running_step_can_fail() -> None:
@@ -90,7 +90,7 @@ def test_running_step_can_fail() -> None:
     step = plan.steps[0]
 
     step.start()
-    step.fail()
+    step.fail("Unable to complete")
 
     assert step.status == PlanStepStatus.FAILED
 
@@ -107,7 +107,7 @@ def test_plan_is_completed_when_all_steps_complete() -> None:
 
     for step in plan.steps:
         step.start()
-        step.complete()
+        step.complete("Root cause located")
 
     assert plan.is_completed is True
 

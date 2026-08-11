@@ -3,6 +3,10 @@ from agent.planning import (
     PlanStep,
     PlanStepStatus,
 )
+from agent.progress import (
+    ProgressStatus,
+    ProgressUpdate,
+)
 from agent.state import AgentState
 
 
@@ -33,6 +37,7 @@ class PlanExecutor:
     def complete_current_step(
         self,
         state: AgentState,
+        result: str,
     ) -> PlanStep:
         plan = self._require_plan(state)
 
@@ -41,13 +46,14 @@ class PlanExecutor:
         if step is None:
             raise RuntimeError("Plan has no in-progress step")
 
-        step.complete()
+        step.complete(result)
 
         return step
 
     def fail_current_step(
         self,
         state: AgentState,
+        result: str,
     ) -> PlanStep:
         plan = self._require_plan(state)
 
@@ -56,7 +62,7 @@ class PlanExecutor:
         if step is None:
             raise RuntimeError("Plan has no in-progress step")
 
-        step.fail()
+        step.fail(result)
 
         return step
 
@@ -68,3 +74,35 @@ class PlanExecutor:
             raise RuntimeError("Agent has no plan")
 
         return state.plan
+
+    def apply_progress(
+        self,
+        state: AgentState,
+        update: ProgressUpdate,
+    ) -> PlanStep:
+        plan = self._require_plan(state)
+
+        step = plan.current_step
+
+        if step is None:
+            raise RuntimeError("Plan has no in-progress step")
+
+        if update.step_id != step.id:
+            raise RuntimeError("Progress update does not match the current plan step")
+
+        if update.status == ProgressStatus.CONTINUE:
+            return step
+
+        if update.status == ProgressStatus.COMPLETED:
+            return self.complete_current_step(
+                state,
+                result=update.summary,
+            )
+
+        if update.status == ProgressStatus.FAILED:
+            return self.fail_current_step(
+                state,
+                result=update.summary,
+            )
+
+        raise AssertionError(f"Unsupported progress status: {update.status}")

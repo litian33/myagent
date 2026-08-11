@@ -210,7 +210,7 @@ P4.6 Error Boundary
   - [x] Plan
   - [x] PlanStep
   - [x] PlanStepStatus
-- [ ] **P5.4 Executor**
+- [x] **P5.4 Executor**
 - [ ] **P5.5 Progress Update**
 - [ ] **P5.6 Replanning**
 - [ ] **P5.7 Completion Criteria**
