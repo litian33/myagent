@@ -194,9 +194,21 @@ class PlanningController:
         key: str,
     ) -> list[str]:
         value = arguments.get(key)
+
         if not isinstance(value, list):
-            raise TypeError(f"{key} must be a list")
-        return [str(item) for item in value]
+            raise TypeError(
+                f"{key} must be a list"
+            )
+
+        if not all(
+            isinstance(item, str)
+            for item in value
+        ):
+            raise TypeError(
+                f"{key} must contain only strings"
+            )
+
+        return value
 
     def _require_string(
         self,
@@ -206,7 +218,7 @@ class PlanningController:
         value = arguments.get(key)
         if not isinstance(value, str):
             raise TypeError(f"{key} must be a string")
-        return str(value)
+        return value
 
     def _create_plan(
         self,
