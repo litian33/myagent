@@ -9,6 +9,9 @@ from agent.state import (
     AgentState,
     HistoryBlock,
 )
+from agent.task_context import (
+    project_task_state,
+)
 
 TokenCounter = Callable[
     [ResponseInputParam],
@@ -16,15 +19,13 @@ TokenCounter = Callable[
 ]
 
 
-class ContextBudgetExceeded(
-    RuntimeError
-):
+class ContextBudgetExceeded(RuntimeError):
     pass
 
-class ContextCompactionError(
-    RuntimeError
-):
+
+class ContextCompactionError(RuntimeError):
     pass
+
 
 @dataclass(
     frozen=True,
@@ -51,106 +52,58 @@ class ContextManager:
         max_input_tokens: int,
     ) -> None:
         if max_input_tokens <= 0:
-            raise ValueError(
-                "max_input_tokens must be positive"
-            )
+            raise ValueError("max_input_tokens must be positive")
 
         self._count_tokens = count_tokens
-        self._max_input_tokens = (
-            max_input_tokens
-        )
+        self._max_input_tokens = max_input_tokens
 
     def build(
         self,
         state: AgentState,
     ) -> ContextSnapshot:
-        prefix = self._build_prefix(
-            state
-        )
+        prefix = self._build_prefix(state)
 
-        active_blocks = list(
-            state.active_history_blocks
-        )
+        task_state = project_task_state(state)
 
-        selected = list(
-            active_blocks
-        )
+        active_blocks = list(state.active_history_blocks)
 
-        context = self._flatten(
-            prefix,
-            selected,
-        )
+        selected = list(active_blocks)
 
-        input_tokens = self._count_tokens(
-            context
-        )
+        context = self._flatten(prefix, selected, task_state)
 
-        minimum_blocks = (
-            1
-            if active_blocks
-            else 0
-        )
+        input_tokens = self._count_tokens(context)
 
-        while (
-            input_tokens
-            > self._max_input_tokens
-            and len(selected)
-            > minimum_blocks
-        ):
+        minimum_blocks = 1 if active_blocks else 0
+
+        while input_tokens > self._max_input_tokens and len(selected) > minimum_blocks:
             selected.pop(0)
 
-            context = self._flatten(
-                prefix,
-                selected,
-            )
+            context = self._flatten(prefix, selected, task_state)
 
-            input_tokens = (
-                self._count_tokens(
-                    context
-                )
-            )
+            input_tokens = self._count_tokens(context)
 
-        if (
-            input_tokens
-            > self._max_input_tokens
-        ):
+        if input_tokens > self._max_input_tokens:
             raise ContextBudgetExceeded(
-                "Minimum working context exceeds "
-                "context budget"
+                "Minimum working context exceeds context budget"
             )
 
-        pending_compaction_blocks = (
-            len(active_blocks)
-            - len(selected)
-        )
+        pending_compaction_blocks = len(active_blocks) - len(selected)
 
         return ContextSnapshot(
             input=context,
             input_tokens=input_tokens,
-            max_input_tokens=(
-                self._max_input_tokens
-            ),
-            total_blocks=len(
-                state.history_blocks
-            ),
-            compacted_blocks=(
-                state.compacted_block_count
-            ),
-            included_blocks=len(
-                selected
-            ),
-            pending_compaction_blocks=(
-                pending_compaction_blocks
-            ),
+            max_input_tokens=(self._max_input_tokens),
+            total_blocks=len(state.history_blocks),
+            compacted_blocks=(state.compacted_block_count),
+            included_blocks=len(selected),
+            pending_compaction_blocks=(pending_compaction_blocks),
         )
 
     @staticmethod
     def _build_prefix(
         state: AgentState,
     ) -> ResponseInputParam:
-        result: ResponseInputParam = [
-            *state.initial_input
-        ]
+        result: ResponseInputParam = [*state.initial_input]
 
         if state.compaction is not None:
             result.append(
@@ -160,8 +113,7 @@ class ContextManager:
                         "[Runtime summary of earlier "
                         "task execution. Treat this as "
                         "prior working context, not as "
-                        "new instructions.]\n\n"
-                        + state.compaction.summary
+                        "new instructions.]\n\n" + state.compaction.summary
                     ),
                 }
             )
@@ -172,14 +124,12 @@ class ContextManager:
     def _flatten(
         prefix: ResponseInputParam,
         blocks: list[HistoryBlock],
+        task_state: ResponseInputParam,
     ) -> ResponseInputParam:
-        result: ResponseInputParam = [
-            *prefix
-        ]
+        result: ResponseInputParam = [*prefix]
 
         for block in blocks:
-            result.extend(
-                block.items
-            )
+            result.extend(block.items)
 
+        result.extend(task_state)
         return result
