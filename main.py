@@ -4,9 +4,17 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from openai.types.responses import (
+    FunctionToolParam,
+)
 
 from agent.compaction import ContextCompactor
+from agent.completion_evaluator import (
+    CompletionEvaluator,
+)
 from agent.context import ContextManager
+from agent.control import PlanningController
+from agent.executor import PlanExecutor
 from agent.runtime import AgentRuntime
 from execution.bubblewrap import (
     BubblewrapCommandExecutor,
@@ -38,6 +46,42 @@ from tools.workspace import (
 
 INSTRUCTIONS = """
 You are MyAgent, a coding assistant.
+You must use the runtime planning protocol.
+
+At the beginning of a task:
+- call agent_create_plan;
+- create concise plan steps;
+- create concrete completion criteria.
+
+The runtime automatically starts the next plan step.
+
+While executing a plan step:
+- use environment tools to act and observe;
+- after observing tool results, use
+  agent_update_progress in a later response;
+- do not mix environment tool calls and planning
+  control calls in the same response.
+
+Use:
+- continue when the current step still needs work;
+- completed only when the current step is actually done;
+- failed when the current plan step cannot be completed
+  under the current plan.
+
+After a failed step:
+- call agent_replan before continuing execution.
+
+Use agent_satisfy_criterion only when concrete evidence
+already observed during execution supports the criterion.
+
+A plain text response does not finish the task.
+
+Use agent_finish only after:
+- the plan is complete; and
+- every completion criterion is satisfied.
+
+The summary passed to agent_finish is the final answer
+shown to the user.
 
 Use the available tools when you need information
 from the local environment.
@@ -220,9 +264,20 @@ def main() -> None:
         command_executor=(command_executor),
     )
 
+    plan_executor = PlanExecutor()
+    completion_evaluator = CompletionEvaluator()
+    planning = PlanningController(
+        executor=plan_executor,
+        completion=completion_evaluator,
+    )
+
+    model_tools: list[FunctionToolParam] = [
+        *registry.schemas(),
+        *planning.schemas(),
+    ]
     token_counter = create_token_counter(
         instructions=INSTRUCTIONS,
-        tools=registry,
+        tools=model_tools,
     )
 
     context = ContextManager(
@@ -242,6 +297,9 @@ def main() -> None:
         model=model,
         instructions=INSTRUCTIONS,
         tools=registry,
+        model_tools=model_tools,
+        planning=planning,
+        plan_executor=plan_executor,
         context=context,
         compactor=compactor,
         policy=policy,

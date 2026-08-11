@@ -6,7 +6,11 @@ from openai import OpenAI
 from openai.types.responses import ResponseInputParam
 
 from agent.context import TokenCounter
-from tools.registry import ToolRegistry
+from openai.types.responses import (
+    FunctionToolParam,
+    ResponseInputParam,
+)
+
 
 TOKEN_ESTIMATE_MARGIN = 1.10
 
@@ -16,9 +20,9 @@ def create_token_counter_openai(
     client: OpenAI,
     model: str,
     instructions: str,
-    tools: ToolRegistry,
+    tools: list[FunctionToolParam],
 ) -> TokenCounter:
-    tool_schemas = tools.schemas()
+    tool_schemas = list(tools)
 
     def count_tokens(
         input_items: ResponseInputParam,
@@ -40,11 +44,11 @@ def create_token_counter_openai(
 def create_token_counter(
     *,
     instructions: str,
-    tools: ToolRegistry,
+    tools: list[FunctionToolParam],
     encoding_name: str = "o200k_base",
 ) -> TokenCounter:
     encoding = tiktoken.get_encoding(encoding_name)
-    tool_schemas = tools.schemas()
+    tool_schemas = list(tools)
 
     def encode(value: str) -> int:
         return len(encoding.encode(value))

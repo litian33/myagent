@@ -6,6 +6,7 @@ from typing import ParamSpec, TypeVar
 import openai
 from openai import OpenAI
 from openai.types.responses import (
+    FunctionToolParam,
     ResponseFunctionToolCall,
     ResponseInputParam,
 )
@@ -19,11 +20,16 @@ from agent.context import (
     ContextManager,
     ContextSnapshot,
 )
+from agent.control import PlanningController
 from agent.errors import (
     AgentExecutionError,
     AgentRunError,
     ContextExecutionError,
     ModelInvocationError,
+)
+from agent.executor import PlanExecutor
+from agent.planning import (
+    PlanStepStatus,
 )
 from agent.state import AgentRunResult, AgentState
 from policy.approval import (
@@ -72,6 +78,9 @@ class AgentRuntime:
         model: str,
         instructions: str,
         tools: ToolRegistry,
+        model_tools: list[FunctionToolParam],
+        planning: PlanningController,
+        plan_executor: PlanExecutor,
         context: ContextManager,
         compactor: ContextCompactor,
         policy: ToolPolicy,
@@ -83,12 +92,65 @@ class AgentRuntime:
         self._model = model
         self._instructions = instructions
         self._tools = tools
+        self._model_tools = list(model_tools)
+        self._planning = planning
+        self._plan_executor = plan_executor
         self._context = context
         self._compactor = compactor
         self._max_output_tokens = max_output_tokens
         self._max_steps = max_steps
         self._policy = policy
         self._approval = approval
+
+    @staticmethod
+    def _protocol_error_outputs(
+        tool_calls: list[ResponseFunctionToolCall],
+        *,
+        message: str,
+    ) -> ResponseInputParam:
+        outputs: ResponseInputParam = []
+
+        for tool_call in tool_calls:
+            outputs.append(
+                {
+                    "type": ("function_call_output"),
+                    "call_id": (tool_call.call_id),
+                    "output": json.dumps(
+                        {
+                            "error": message,
+                            "call": (tool_call.name),
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+
+        return outputs
+
+    def _start_next_plan_step_if_ready(
+        self,
+        state: AgentState,
+    ) -> None:
+        plan = state.plan
+
+        if plan is None:
+            return
+
+        if plan.is_completed:
+            return
+
+        if plan.current_step is not None:
+            return
+
+        if any(step.status == PlanStepStatus.FAILED for step in plan.steps):
+            return
+
+        if not plan.pending_steps:
+            return
+
+        step = self._plan_executor.start_next_step(state)
+
+        print(f"[plan step] started {step.id}: {step.description}")
 
     def _run(
         self,
@@ -116,11 +178,9 @@ class AgentRuntime:
 
             response = self._call_model(context=context.input)
 
-            tool_calls: list[ResponseFunctionToolCall] = []
-
-            for item in response.output:
-                if item.type == "function_call":
-                    tool_calls.append(item)
+            tool_calls: list[ResponseFunctionToolCall] = [
+                item for item in response.output if item.type == "function_call"
+            ]
 
             if not tool_calls:
                 state.record_step(
@@ -128,11 +188,85 @@ class AgentRuntime:
                     [],
                 )
 
-                state.complete()
+                print(
+                    "[protocol] "
+                    "Task remains running; "
+                    "agent_finish is required "
+                    "to complete the task."
+                )
 
-                return AgentRunResult(status=state.status, output=response.output_text)
+                continue
+            control_calls = [
+                call for call in tool_calls if self._planning.handles(call.name)
+            ]
+            environment_calls = [
+                call for call in tool_calls if not self._planning.handles(call.name)
+            ]
 
+            if control_calls and environment_calls:
+                tool_outputs = self._protocol_error_outputs(
+                    tool_calls,
+                    message=(
+                        "Environment tool calls "
+                        "and planning control calls "
+                        "cannot be mixed in the "
+                        "same model response"
+                    ),
+                )
+
+                state.record_step(
+                    response.output,
+                    tool_outputs,
+                )
+
+                continue
+
+            if len(control_calls) > 1:
+                tool_outputs = self._protocol_error_outputs(
+                    control_calls,
+                    message=(
+                        "Only one planning control call is allowed per model response"
+                    ),
+                )
+
+                state.record_step(
+                    response.output,
+                    tool_outputs,
+                )
+
+                continue
             tool_outputs: ResponseInputParam = []
+            if control_calls:
+                tool_call = control_calls[0]
+                print(f"[planning execute] {tool_call.name}({tool_call.arguments})")
+                result = self._planning.execute(
+                    state,
+                    tool_call,
+                )
+                print(f"[planning result] {result}")
+                tool_outputs = [
+                    {
+                        "type": ("function_call_output"),
+                        "call_id": (tool_call.call_id),
+                        "output": result.output,
+                    }
+                ]
+                state.record_step(
+                    response.output,
+                    tool_outputs,
+                )
+
+                if result.final_output is not None:
+                    state.complete()
+
+                    return AgentRunResult(
+                        status=state.status,
+                        output=result.final_output,
+                    )
+
+                # 如果计划没有结束，这里驱动下一个Step
+                self._start_next_plan_step_if_ready(state)
+                continue
 
             for tool_call in tool_calls:
                 print(f"[tool call] {tool_call.name}({tool_call.arguments})")
@@ -191,7 +325,7 @@ class AgentRuntime:
             model=self._model,
             instructions=self._instructions,
             input=context,
-            tools=self._tools.schemas(),
+            tools=self._model_tools,
             max_output_tokens=(self._max_output_tokens),
             truncation="disabled",
         )
