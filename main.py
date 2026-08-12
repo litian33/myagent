@@ -16,6 +16,7 @@ from agent.context import ContextManager
 from agent.control import PlanningController
 from agent.executor import PlanExecutor
 from agent.runtime import AgentRuntime
+from agent.session import AgentSession
 from execution.bubblewrap import (
     BubblewrapCommandExecutor,
     BubblewrapConfig,
@@ -308,27 +309,40 @@ def main() -> None:
         max_steps=50,
     )
 
-    task = input("You: ").strip()
+    session = AgentSession()
 
-    if not task:
-        return
+    while True:
+        task = input("You: ").strip()
 
-    result = agent.run(task)
+        if not task:
+            continue
 
-    print()
-    print(f"[status] {result.status.value}")
+        if task in {
+            "/exit",
+            "/quit",
+        }:
+            break
 
-    if result.output is not None:
-        print("[final answer]")
-        print(result.output)
-
-    if result.error is not None:
-        print(
-            "[error] "
-            f"kind={result.error.kind.value}, "
-            f"retryable={result.error.retryable}"
+        result = agent.run(
+            task,
+            session=session,
         )
-        print(result.error.message)
+
+        print()
+        print(f"[status] {result.status.value}")
+
+        if result.output is not None:
+            print("[final answer]")
+            print(result.output)
+
+        if result.error is not None:
+            print(
+                "[error] "
+                f"kind={result.error.kind.value}, "
+                f"retryable="
+                f"{result.error.retryable}"
+            )
+            print(result.error.message)
 
 
 if __name__ == "__main__":

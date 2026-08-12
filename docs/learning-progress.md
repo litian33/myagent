@@ -234,9 +234,9 @@ P4.6 Error Boundary
   - [x] Token Budget
   - [x] Working Context
   - [x] Compaction
-  - [ ] Phase 6 正式进入时做一次概念收束
-- [ ] **P6.2 Memory Taxonomy**
-- [ ] **P6.3 Multi-turn Session**
+  - [x] Phase 6 正式进入时做一次概念收束
+- [x] **P6.2 Memory Taxonomy**
+- [x] **P6.3 Multi-turn Session**
 - [ ] **P6.4 Memory Store**
   - [ ] SQLite
   - [ ] put / get / search / delete

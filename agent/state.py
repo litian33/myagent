@@ -66,12 +66,15 @@ class AgentState:
     def create(
         cls,
         task: str,
+        *,
+        prior_context: ResponseInputParam | None = None,
     ) -> "AgentState":
         initial_input: ResponseInputParam = [
+            *(prior_context or []),
             {
                 "role": "user",
                 "content": task,
-            }
+            },
         ]
 
         return cls(

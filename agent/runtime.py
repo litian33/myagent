@@ -31,6 +31,7 @@ from agent.executor import PlanExecutor
 from agent.planning import (
     PlanStepStatus,
 )
+from agent.session import AgentSession
 from agent.state import AgentRunResult, AgentState
 from policy.approval import (
     ApprovalHandler,
@@ -295,14 +296,28 @@ class AgentRuntime:
     def run(
         self,
         task: str,
+        *,
+        session: AgentSession | None = None,
     ) -> AgentRunResult:
-        state = AgentState.create(task)
+        prior_context: ResponseInputParam | None = None
+
+        if session is not None:
+            prior_context = session.project_context()
+
+        state = AgentState.create(
+            task,
+            prior_context=prior_context,
+        )
+
         state.start()
+
         try:
-            return self._run(state)
+            result = self._run(state)
+
         except AgentExecutionError as exc:
             state.fail()
-            return AgentRunResult(
+
+            result = AgentRunResult(
                 status=state.status,
                 output=None,
                 error=AgentRunError(
@@ -311,9 +326,18 @@ class AgentRuntime:
                     retryable=exc.retryable,
                 ),
             )
+
         except Exception:
             state.fail()
             raise
+
+        if session is not None and result.output is not None:
+            session.record_turn(
+                user_input=task,
+                assistant_output=result.output,
+            )
+
+        return result
 
     @handle_openai_errors
     def _call_model(
