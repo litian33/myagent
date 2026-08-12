@@ -10,6 +10,15 @@ from agent.memory.sqlite import (
 from agent.memory.store import (
     MemoryStore,
 )
+from agent.memory.write import (
+    MemoryCandidate,
+    MemorySource,
+    MemoryWriteDecision,
+    MemoryWriteEvaluation,
+    MemoryWritePolicy,
+    MemoryWriter,
+    MemoryWriteResult,
+)
 
 __all__ = [
     "MemoryKind",
@@ -18,4 +27,11 @@ __all__ = [
     "MemoryScopeKind",
     "MemoryStore",
     "SQLiteMemoryStore",
+    "MemoryCandidate",
+    "MemorySource",
+    "MemoryWriteDecision",
+    "MemoryWriteEvaluation",
+    "MemoryWritePolicy",
+    "MemoryWriteResult",
+    "MemoryWriter",
 ]

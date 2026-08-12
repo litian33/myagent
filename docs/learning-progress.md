@@ -237,10 +237,10 @@ P4.6 Error Boundary
   - [x] Phase 6 正式进入时做一次概念收束
 - [x] **P6.2 Memory Taxonomy**
 - [x] **P6.3 Multi-turn Session**
-- [ ] **P6.4 Memory Store**
-  - [ ] SQLite
-  - [ ] put / get / search / delete
-- [ ] **P6.5 Memory Write Policy**
+- [x] **P6.4 Memory Store**
+  - [x] SQLite
+  - [x] put / get / search / delete
+- [x] **P6.5 Memory Write Policy**
 - [ ] **P6.6 Memory Retrieval**
 - [ ] **P6.7 Restart 实验**
 
