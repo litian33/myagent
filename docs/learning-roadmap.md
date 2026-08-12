@@ -671,9 +671,62 @@ delete
 
 实现按任务相关性 Recall。
 
-### P6.7 Restart 实验
+### P6.7 Memory Promotion / Capture
 
-退出 MyAgent 后重新启动，让新任务能够召回此前保存的少量长期事实。
+补齐长期记忆写入链路中此前缺失的一环：
+
+```text
+Session / Run Information
+        ↓
+Memory Promotion
+        ↓
+Memory Proposal / Candidate
+        ↓
+Write Policy
+        ↓
+Persistent Memory
+```
+
+重点理解：
+
+```text
+Session-worthy ≠ Memory-worthy
+History ≠ Memory
+Verified ≠ Worth Remembering
+```
+
+第一版只要求自动捕获**用户明确表达、稳定、未来仍有复用价值的信息**，例如用户偏好、项目长期约定和明确要求记住的事实。
+
+课程边界：
+
+- LLM 可以提出“什么可能值得记住”的 `MemoryProposal`。
+- Runtime 必须根据真实输入绑定可信 provenance，不能让模型自己声明 `USER_EXPLICIT` / `VERIFIED_OBSERVATION`。
+- `MemoryWritePolicy` 继续负责 Candidate 是否允许持久化。
+- 普通 Session Turn 不应整体复制进 Memory。
+- 不要求每个 Completed Run 自动生成 Episodic Memory。
+- 暂不从任意 Tool Observation 自动提炼 Semantic / Procedural Memory。
+- Memory provenance、冲突、质量评价等高级问题留到 Phase 9。
+
+### P6.8 Automatic Restart 实验
+
+不再人工 seed Memory，而是完整验证：
+
+```text
+Process A
+→ User Explicit Information
+→ Memory Promotion / Capture
+→ Write Policy
+→ SQLite
+→ exit
+
+Process B
+→ reopen SQLite
+→ Memory Retrieval
+→ Context Projection
+→ Agent recalls and uses memory
+```
+
+证明 Memory 生命周期真正超过 Session 和进程生命周期。
 
 ## Exit Criteria
 
@@ -682,6 +735,15 @@ delete
 ```text
 Context ≠ History ≠ Compaction ≠ Session Memory ≠ Long-term Memory ≠ Knowledge Base
 ```
+
+并能够解释和演示：
+
+- `SessionTurn` 用于当前会话连续性，不等于 Long-term Memory。
+- Long-term Memory 是从短期信息中**选择性晋升**的结果，而不是对话/Run 的持久化副本。
+- Agent 能把少量用户明确、稳定的信息自动晋升并持久化。
+- Runtime 而不是 LLM 负责绑定可信 Memory Source / provenance。
+- Agent 重启后能按相关性召回此前自动保存的 Memory。
+- 大多数普通 Turn 不产生 Long-term Memory。
 
 ---
 
@@ -1262,16 +1324,16 @@ Trace + Metrics + Eval Evidence
 
 # 4. 当前项目学习基线
 
-截至本课程大纲建立时，MyAgent 已经实际覆盖多个阶段：
+当前课程已推进到 Phase 6：
 
 | Phase | 当前状态 | 说明 |
 |---|---|---|
 | Phase 1 | 已完成 | LLM / Responses API / typed request 基础已经掌握 |
 | Phase 2 | 已完成 | 已有真实 Agent Loop 和多 Tool Call |
-| Phase 3 | 基本完成 | Tool Registry、filesystem、shell、editing 已有实现 |
-| Phase 4 | 进行中 | State、Context、Token Budget、Compaction 已有实现；应补 Runtime Lifecycle / Error Boundary 后退出 |
-| Phase 5 | 未开始 | 下一主要学习阶段 |
-| Phase 6 | 部分提前完成 | Context 已较深入；真正 Session / Long-term Memory 未开始 |
+| Phase 3 | 已完成 | Tool Registry、filesystem、shell、editing 已形成独立运行层 |
+| Phase 4 | 已完成 | State、Context、Token Budget、Compaction、Lifecycle、Error Boundary 已完成 |
+| Phase 5 | 已完成 | Planning / Progress / Replanning / Completion Criteria 已完成 |
+| Phase 6 | 进行中 | Session、SQLite Memory Store、Write Policy、Retrieval 已完成；当前补齐 P6.7 Memory Promotion / Capture |
 | Phase 7 | 未开始 | RAG / Retrieval 尚未系统学习 |
 | Phase 8 | 部分提前完成 | Tool Policy、Approval、Workspace、Secret Protection、Bubblewrap 已经实现不少；暂时冻结深入 |
 | Phase 9 | 未开始 | Tracing / Evaluation 尚未系统实现 |
@@ -1280,13 +1342,13 @@ Trace + Metrics + Eval Evidence
 当前推荐学习顺序：
 
 ```text
-P4.5 Runtime Lifecycle
+P6.7 Memory Promotion / Capture
         ↓
-P4.6 Error Boundary
+P6.8 Automatic Restart 实验
         ↓
-Phase 4 Exit Review
+Phase 6 Exit Review
         ↓
-Phase 5 Planning
+Phase 7 RAG / Knowledge Retrieval
 ```
 
 Phase 8 的 Sandbox 方向暂时冻结，等主线走到 Phase 8 时再统一复盘。
