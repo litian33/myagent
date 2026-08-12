@@ -28,6 +28,10 @@ from agent.errors import (
     ModelInvocationError,
 )
 from agent.executor import PlanExecutor
+from agent.memory.retrieval import (
+    MemoryRetriever,
+    project_memories,
+)
 from agent.planning import (
     PlanStepStatus,
 )
@@ -88,6 +92,7 @@ class AgentRuntime:
         approval: ApprovalHandler,
         max_output_tokens: int,
         max_steps: int = 10,
+        memory_retriever: (MemoryRetriever | None) = None,
     ) -> None:
         self._client = client
         self._model = model
@@ -102,6 +107,7 @@ class AgentRuntime:
         self._max_steps = max_steps
         self._policy = policy
         self._approval = approval
+        self._memory_retriever = memory_retriever
 
     @staticmethod
     def _protocol_error_outputs(
@@ -299,14 +305,20 @@ class AgentRuntime:
         *,
         session: AgentSession | None = None,
     ) -> AgentRunResult:
-        prior_context: ResponseInputParam | None = None
+        context_prefix: ResponseInputParam = []
 
         if session is not None:
-            prior_context = session.project_context()
+            context_prefix.extend(session.project_context())
 
+        if self._memory_retriever is not None:
+            memories = self._memory_retriever.retrieve(task)
+
+            print(f"[memory] retrieved={len(memories)}")
+
+            context_prefix.extend(project_memories(memories))
         state = AgentState.create(
             task,
-            prior_context=prior_context,
+            prior_context=(context_prefix or None),
         )
 
         state.start()

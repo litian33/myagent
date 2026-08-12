@@ -15,6 +15,14 @@ from agent.completion_evaluator import (
 from agent.context import ContextManager
 from agent.control import PlanningController
 from agent.executor import PlanExecutor
+from agent.memory import (
+    MemoryScope,
+    MemoryScopeKind,
+    SQLiteMemoryStore,
+)
+from agent.memory.retrieval import (
+    MemoryRetriever,
+)
 from agent.runtime import AgentRuntime
 from agent.session import AgentSession
 from execution.bubblewrap import (
@@ -291,8 +299,20 @@ def main() -> None:
         max_output_tokens=2048,
     )
     policy = ToolPolicy()
-
     approval = CliApprovalHandler()
+
+    memory_store = SQLiteMemoryStore(workspace.root / ".myagent" / "memory.db")
+    memory_retriever = MemoryRetriever(
+        store=memory_store,
+        scopes=[
+            MemoryScope(
+                kind=(MemoryScopeKind.PROJECT),
+                key="myagent",
+            ),
+        ],
+        max_results=5,
+    )
+
     agent = AgentRuntime(
         client=client,
         model=model,
@@ -307,6 +327,7 @@ def main() -> None:
         approval=approval,
         max_output_tokens=max_output_tokens,
         max_steps=50,
+        memory_retriever=(memory_retriever),
     )
 
     session = AgentSession()

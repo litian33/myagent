@@ -241,7 +241,7 @@ P4.6 Error Boundary
   - [x] SQLite
   - [x] put / get / search / delete
 - [x] **P6.5 Memory Write Policy**
-- [ ] **P6.6 Memory Retrieval**
+- [x] **P6.6 Memory Retrieval**
 - [ ] **P6.7 Restart 实验**
 
 ### Phase 6 Exit Review
