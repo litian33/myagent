@@ -25,6 +25,7 @@ from agent.memory import (
 from agent.memory.capture import (
     MemoryCapture,
 )
+from agent.memory.proposal import LLMMemoryProposalExtractor
 from agent.memory.retrieval import (
     MemoryRetriever,
 )
@@ -325,10 +326,8 @@ def main() -> None:
         store=memory_store,
         policy=MemoryWritePolicy(),
     )
-
-    memory_capture = MemoryCapture(
-        scope=project_memory_scope,
-    )
+    memory_exactor = LLMMemoryProposalExtractor(client=client, model=model)
+    memory_capture = MemoryCapture(scope=project_memory_scope, extractor=memory_exactor)
 
     agent = AgentRuntime(
         client=client,

@@ -47,34 +47,8 @@ from policy.model import (
     ApprovalRequest,
     PolicyDecision,
 )
+from tools.base import handle_openai_errors
 from tools.registry import ToolRegistry
-
-P = ParamSpec("P")
-R = TypeVar("R")
-
-
-def handle_openai_errors(func: Callable[P, R]) -> Callable[P, R]:
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        try:
-            return func(*args, **kwargs)
-        except (
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-            openai.RateLimitError,
-            openai.InternalServerError,
-        ) as exc:
-            raise ModelInvocationError(
-                str(exc),
-                retryable=True,
-            ) from exc
-        except openai.APIError as exc:
-            raise ModelInvocationError(
-                str(exc),
-                retryable=False,
-            ) from exc
-
-    return wrapper
 
 
 class AgentRuntime:
@@ -143,8 +117,7 @@ class AgentRuntime:
     def _capture_memories(
         self,
         *,
-        state: AgentState,
-        result: AgentRunResult,
+        user_input: str,
     ) -> None:
         if self._memory_capture is None:
             return
@@ -152,20 +125,16 @@ class AgentRuntime:
         if self._memory_writer is None:
             return
 
-        if result.output is None:
-            return
-
-        if result.status != AgentStatus.COMPLETED:
-            return
-
-        candidates = self._memory_capture.capture_completed_run(
-            task=state.task,
-            output=result.output,
+        candidates = self._memory_capture.capture_user_input(
+            user_input=user_input,
         )
 
+        print(f"[memory capture] candidates={len(candidates)}")
+
         for candidate in candidates:
-            write_result = self._memory_writer.write(candidate)
-            print(f"[memory write] decision={write_result.evaluation.decision.value}")
+            result = self._memory_writer.write(candidate)
+
+            print(f"[memory write] decision={result.evaluation.decision.value}")
 
     def _start_next_plan_step_if_ready(
         self,
@@ -377,8 +346,7 @@ class AgentRuntime:
             raise
 
         self._capture_memories(
-            state=state,
-            result=result,
+            user_input=task,
         )
         if session is not None and result.output is not None:
             session.record_turn(

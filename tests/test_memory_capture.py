@@ -1,26 +1,46 @@
 from agent.memory import MemoryKind, MemoryScope, MemoryScopeKind, MemorySource
 from agent.memory.capture import MemoryCapture
+from agent.memory.proposal import MemoryProposal
 
 
-def test_capture_completed_run() -> None:
+class FakeExtractor:
+    def extract(
+        self,
+        user_input: str,
+    ) -> list[MemoryProposal]:
+        return [
+            MemoryProposal(
+                kind=MemoryKind.PROCEDURAL,
+                evidence=("本项目统一使用 pytest -q"),
+            ),
+            MemoryProposal(
+                kind=MemoryKind.SEMANTIC,
+                evidence=("用户根本没有说过 Redis"),
+            ),
+        ]
+
+
+def test_memory_capture_grounds_user_evidence():
     scope = MemoryScope(
         kind=MemoryScopeKind.PROJECT,
         key="myagent",
     )
 
-    capture = MemoryCapture(scope=scope)
+    capture = MemoryCapture(
+        scope=scope,
+        extractor=FakeExtractor(),
+    )
 
-    candidates = capture.capture_completed_run(
-        task=("Fix normalize_username"),
-        output=("Fixed and tests passed."),
+    candidates = capture.capture_user_input(
+        user_input=("记住：本项目统一使用 pytest -q")
     )
 
     assert len(candidates) == 1
 
     candidate = candidates[0]
 
-    assert candidate.kind == MemoryKind.EPISODIC
+    assert candidate.kind == MemoryKind.PROCEDURAL
 
-    assert candidate.source == MemorySource.VERIFIED_OBSERVATION
+    assert candidate.source == MemorySource.USER_EXPLICIT
 
-    assert "normalize_username" in candidate.content
+    assert candidate.content == ("本项目统一使用 pytest -q")

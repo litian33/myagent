@@ -1,10 +1,13 @@
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, TypeVar, get_type_hints
+from functools import wraps
+from typing import Any, ParamSpec, TypeVar, get_type_hints
 
+import openai
 from openai.types.responses import FunctionToolParam
 
+from agent.errors import ModelInvocationError
 from policy.model import (
     ToolCapability,
 )
@@ -15,6 +18,33 @@ F = TypeVar(
     "F",
     bound=ToolHandler,
 )
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def handle_openai_errors(func: Callable[P, R]) -> Callable[P, R]:
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return func(*args, **kwargs)
+        except (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.RateLimitError,
+            openai.InternalServerError,
+        ) as exc:
+            raise ModelInvocationError(
+                str(exc),
+                retryable=True,
+            ) from exc
+        except openai.APIError as exc:
+            raise ModelInvocationError(
+                str(exc),
+                retryable=False,
+            ) from exc
+
+    return wrapper
 
 
 @dataclass(
