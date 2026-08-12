@@ -46,7 +46,7 @@ P4.6 Error Boundary
 | Phase 3 | Tool Runtime | ✅ 完成 | 已完成文件系统以及系统命令封装调用 |
 | Phase 4 | Agent State + Runtime | ✅ 完成 | 已完成单轮会话状态驱动 |
 | Phase 5 | Planning | ✅ 完成 | 已完成单轮会话状态内的任务规划以及驱动 |
-| Phase 6 | Context + Memory | 🟡 进行中 | 已经完成存储策略以及存储能力提高，未接入运行时 |
+| Phase 6 | Context + Memory | 🟡 进行中 | Store / Write Policy / Retrieval / Runtime 接线已完成；当前完成选择性 Memory Promotion / Capture |
 | Phase 7 | RAG / Knowledge Retrieval | ⬜ 未开始 | — |
 | Phase 8 | Safety / Guardrails / HITL | 🟡 部分提前完成 | Policy / Approval / Sandbox 等已提前实现，当前冻结深入 |
 | Phase 9 | Observability + Evaluation | ⬜ 未开始 | — |
@@ -156,7 +156,7 @@ P4.6 Error Boundary
 
 # 6. Phase 4：Agent State + Runtime
 
-**状态：进行中**
+**状态：完成**
 
 - [x] **P4.1 AgentState**
   - [x] 引入 `AgentState`
@@ -199,11 +199,12 @@ P4.6 Error Boundary
 - [x] Runtime 对任务结束原因有明确状态
 - [x] 主要错误边界清晰，不依赖到处 `try/except` 猜测状态
 
-**完成后立即进入 Phase 5，不继续深入 Context/Sandbox。**
-
 ---
 
 # 7. Phase 5：Planning
+
+**状态：完成**
+
 - [x] **P5.1 Reactive Agent 与 ReAct**
 - [x] **P5.2 Goal、Plan、Todo、Action 的区别**
 - [x] **P5.3 最小 Planner**
@@ -227,14 +228,14 @@ P4.6 Error Boundary
 
 # 8. Phase 6：Context + Memory
 
-**状态：部分提前完成**
+**状态：进行中**
 
-- [~] **P6.1 Context Engineering 复盘**
+- [x] **P6.1 Context Engineering 复盘**
   - [x] History
   - [x] Token Budget
   - [x] Working Context
   - [x] Compaction
-  - [x] Phase 6 正式进入时做一次概念收束
+  - [x] 完成 Context / State / History / Memory 概念收束
 - [x] **P6.2 Memory Taxonomy**
 - [x] **P6.3 Multi-turn Session**
 - [x] **P6.4 Memory Store**
@@ -242,12 +243,34 @@ P4.6 Error Boundary
   - [x] put / get / search / delete
 - [x] **P6.5 Memory Write Policy**
 - [x] **P6.6 Memory Retrieval**
-- [x] **P6.7 Restart 实验**
+  - [x] Lexical retrieval / scope filter / dedup / ranking
+  - [x] Memory Projection 进入 Context
+  - [x] 外部 seed Memory 后完成 restart + recall 集成实验
+- [~] **P6.7 Memory Promotion / Capture**
+  - [x] 引入独立 `MemoryCapture`
+  - [x] `AgentRuntime` 已接入 `MemoryCapture + MemoryWriter`
+  - [x] 仅在 `COMPLETED` Run 后触发当前 Capture
+  - [x] 当前实现能够生成 `EPISODIC + VERIFIED_OBSERVATION` Candidate
+  - [ ] 不再把每个成功 Run 的 task/output 整体复制成长期 Memory
+  - [ ] 引入 `MemoryProposal`，让模型只负责提出“什么可能值得记住”
+  - [ ] 第一版只自动提取用户明确、稳定、未来有复用价值的信息
+  - [ ] Runtime 根据当前真实 `user_input` 做 evidence grounding，并由 Runtime 绑定 `USER_EXPLICIT`
+  - [ ] 普通 Turn 应返回 0 个 Proposal / 不产生长期 Memory
+  - [ ] 暂不从任意 Tool Observation 自动晋升 Semantic / Procedural Memory
+- [ ] **P6.8 Automatic Restart 实验**
+  - [ ] Process A 通过真实 User Turn 自动 Promotion + Persist
+  - [ ] 退出进程
+  - [ ] Process B 自动 Retrieve + Project + Recall
+  - [ ] 不依赖人工 seed Memory
 
 ### Phase 6 Exit Review
 
 - [ ] 能解释 Context ≠ History ≠ Compaction ≠ Session Memory ≠ Long-term Memory ≠ Knowledge Base
-- [ ] Agent 能跨运行保存并召回少量长期事实
+- [ ] 能解释 Session-worthy ≠ Memory-worthy
+- [ ] 能解释 Memory Proposal / Candidate / Write Policy / MemoryRecord 的不同职责
+- [ ] Runtime 而不是 LLM 负责绑定可信 Memory Source / provenance
+- [ ] 大多数普通 Turn 不产生 Long-term Memory
+- [ ] Agent 能跨进程自动保存并召回少量长期事实
 
 ---
 
@@ -408,20 +431,26 @@ P4.6 Error Boundary
 ## Current
 
 ```text
-当前阶段：Phase 4 — Agent State + Runtime
-当前课程：P4.5 Runtime Lifecycle
-随后课程：P4.6 Error Boundary
-下一阶段：Phase 5 — Planning
+当前阶段：Phase 6 — Context + Memory
+当前课程：P6.7 Memory Promotion / Capture
+当前实现：已完成 Capture / Writer / Runtime 基础接线，但仍是“每个成功 Run → Episodic Memory”的教学中间态
+本节目标：演进为“少量用户明确稳定信息 → Proposal → Runtime Grounding → Candidate → WritePolicy → Store”
+随后课程：P6.8 Automatic Restart 实验
+下一阶段：Phase 7 — RAG / Knowledge Retrieval
 暂时冻结：Phase 8 Sandbox 深入优化
 ```
 
-## P4.5 完成条件
+## P6.7 完成条件
 
-- [ ] 定义最小 Runtime Status
-- [ ] `AgentRuntime.run()` 在不同退出路径写入正确状态
-- [ ] `max_steps` 不再只表现为一个孤立异常，而有明确 Runtime 语义
-- [ ] 增加最小测试
-- [ ] 自己能够解释状态机为什么属于 Runtime，而不是 LLM
+- [x] `MemoryCapture` 与 `MemoryWriter` 职责分离
+- [x] Runtime 写侧已经接通
+- [ ] 不再无差别持久化每个成功 Session Turn / Run Result
+- [ ] 定义 `MemoryProposal`，与已可信的 `MemoryCandidate` 分离
+- [ ] 模型只能提出 Proposal，不能自行声明可信 `MemorySource`
+- [ ] Runtime 能根据当前 User Input 验证 Proposal evidence
+- [ ] 第一版只把 `USER_EXPLICIT` 的稳定信息晋升为长期 Memory
+- [ ] 普通对话不产生 Memory
+- [ ] 为 Promotion 增加一个最小高价值实验或测试
 
 ---
 
@@ -448,6 +477,15 @@ P4.6 Error Boundary
 ---
 
 # 16. 历史打卡
+
+## 2026-08-12 — Phase 6 路线微调
+
+- 状态：🟡 P6.7 进行中
+- 原因：原 Roadmap 已有 Memory Store、Write Policy、Retrieval 和 Restart，但遗漏了“运行信息如何选择性晋升为 Memory Candidate”这一写入前置步骤。
+- 调整：新增 P6.7 Memory Promotion / Capture；原 Restart 实验顺延为 P6.8 Automatic Restart 实验。
+- 当前代码：`MemoryCapture` 已接入 Runtime，成功 Run 会生成 Episodic Candidate；该版本用于暴露 Session / Run 与 Long-term Memory 重复的问题，尚不是最终 Promotion 策略。
+- 本节最终边界：第一版只自动晋升用户明确、稳定、未来有复用价值的信息；不自动复制所有 Turn，不自动从任意 Tool Observation 抽长期事实。
+- 下一课：完成 P6.7 后进入 P6.8。
 
 ## 2026-08 — 课程路线重新基线化
 
