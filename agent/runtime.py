@@ -28,7 +28,8 @@ from agent.errors import (
     ModelInvocationError,
 )
 from agent.executor import PlanExecutor
-from agent.memory.capture import MemoryCapture
+from agent.memory.capture import MemoryCapture, MemoryCaptureResult
+from agent.memory.proposal import MemoryRoute
 from agent.memory.retrieval import (
     MemoryRetriever,
     project_memories,
@@ -118,23 +119,32 @@ class AgentRuntime:
         self,
         *,
         user_input: str,
-    ) -> None:
+    ) -> MemoryCaptureResult:
         if self._memory_capture is None:
-            return
+            return MemoryCaptureResult(
+                route=(MemoryRoute.CONTINUE_AGENT),
+                candidates=[],
+            )
 
-        if self._memory_writer is None:
-            return
+        capture_result = self._memory_capture.capture_user_input(user_input=user_input)
 
-        candidates = self._memory_capture.capture_user_input(
-            user_input=user_input,
+        print(
+            "[memory capture] "
+            f"route="
+            f"{capture_result.route.value}, "
+            f"candidates="
+            f"{len(capture_result.candidates)}"
         )
 
-        print(f"[memory capture] candidates={len(candidates)}")
+        if self._memory_writer is not None:
+            for candidate in capture_result.candidates:
+                write_result = self._memory_writer.write(candidate)
 
-        for candidate in candidates:
-            result = self._memory_writer.write(candidate)
+                print(
+                    f"[memory write] decision={write_result.evaluation.decision.value}"
+                )
 
-            print(f"[memory write] decision={result.evaluation.decision.value}")
+        return capture_result
 
     def _start_next_plan_step_if_ready(
         self,
@@ -307,6 +317,30 @@ class AgentRuntime:
         *,
         session: AgentSession | None = None,
     ) -> AgentRunResult:
+
+        capture_result = self._capture_memories(
+            user_input=task,
+        )
+
+        if capture_result.route == MemoryRoute.MEMORY_ONLY:
+            output = "已记录到长期记忆。"
+
+            result = AgentRunResult(
+                status=AgentStatus.COMPLETED,
+                output=output,
+            )
+
+            if session is not None:
+                session.record_turn(
+                    user_input=task,
+                    assistant_output=output,
+                )
+
+            return result
+
+        #
+        # normal Agent Run starts here
+        #
         context_prefix: ResponseInputParam = []
 
         if session is not None:
@@ -345,9 +379,6 @@ class AgentRuntime:
             state.fail()
             raise
 
-        self._capture_memories(
-            user_input=task,
-        )
         if session is not None and result.output is not None:
             session.record_turn(
                 user_input=task,

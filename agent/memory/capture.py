@@ -1,12 +1,24 @@
+from dataclasses import dataclass
+
 from agent.memory.model import (
     MemoryKind,
     MemoryScope,
 )
-from agent.memory.proposal import MemoryProposalExtractor
+from agent.memory.proposal import MemoryProposalExtractor, MemoryRoute
 from agent.memory.write import (
     MemoryCandidate,
     MemorySource,
 )
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class MemoryCaptureResult:
+    route: MemoryRoute
+    candidates: list[MemoryCandidate]
+
 
 class MemoryCapture:
     def __init__(
@@ -22,21 +34,17 @@ class MemoryCapture:
         self,
         *,
         user_input: str,
-    ) -> list[MemoryCandidate]:
-        proposals = self._extractor.extract(user_input)
+    ) -> MemoryCaptureResult:
+        extraction = self._extractor.extract(user_input)
 
         candidates: list[MemoryCandidate] = []
 
-        for proposal in proposals:
+        for proposal in extraction.proposals:
             evidence = proposal.evidence.strip()
 
             if not evidence:
                 continue
 
-            #
-            # Grounding:
-            # model cannot invent evidence.
-            #
             if evidence not in user_input:
                 continue
 
@@ -55,4 +63,7 @@ class MemoryCapture:
                 )
             )
 
-        return candidates
+        return MemoryCaptureResult(
+            route=extraction.route,
+            candidates=candidates,
+        )

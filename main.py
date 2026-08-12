@@ -266,7 +266,7 @@ def main() -> None:
 
     model = os.getenv(
         "OPENAI_MODEL",
-        "gpt-5.6-luna",
+        "deepseek-v4-flash",
     )
 
     workspace = Workspace(Path(__file__).resolve().parent)
