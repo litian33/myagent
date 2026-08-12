@@ -7,6 +7,7 @@ PROTECTED_DIRECTORY_NAMES = frozenset(
     {
         ".git",
         ".venv",
+        ".myagent",
         "__pycache__",
         "node_modules",
     }

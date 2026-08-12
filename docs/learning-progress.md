@@ -242,7 +242,7 @@ P4.6 Error Boundary
   - [x] put / get / search / delete
 - [x] **P6.5 Memory Write Policy**
 - [x] **P6.6 Memory Retrieval**
-- [ ] **P6.7 Restart 实验**
+- [x] **P6.7 Restart 实验**
 
 ### Phase 6 Exit Review
 
