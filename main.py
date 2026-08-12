@@ -18,7 +18,12 @@ from agent.executor import PlanExecutor
 from agent.memory import (
     MemoryScope,
     MemoryScopeKind,
+    MemoryWritePolicy,
+    MemoryWriter,
     SQLiteMemoryStore,
+)
+from agent.memory.capture import (
+    MemoryCapture,
 )
 from agent.memory.retrieval import (
     MemoryRetriever,
@@ -312,6 +317,18 @@ def main() -> None:
         ],
         max_results=5,
     )
+    project_memory_scope = MemoryScope(
+        kind=MemoryScopeKind.PROJECT,
+        key="myagent",
+    )
+    memory_writer = MemoryWriter(
+        store=memory_store,
+        policy=MemoryWritePolicy(),
+    )
+
+    memory_capture = MemoryCapture(
+        scope=project_memory_scope,
+    )
 
     agent = AgentRuntime(
         client=client,
@@ -328,6 +345,8 @@ def main() -> None:
         max_output_tokens=max_output_tokens,
         max_steps=50,
         memory_retriever=(memory_retriever),
+        memory_capture=memory_capture,
+        memory_writer=memory_writer,
     )
 
     session = AgentSession()

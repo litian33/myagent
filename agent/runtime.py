@@ -28,15 +28,17 @@ from agent.errors import (
     ModelInvocationError,
 )
 from agent.executor import PlanExecutor
+from agent.memory.capture import MemoryCapture
 from agent.memory.retrieval import (
     MemoryRetriever,
     project_memories,
 )
+from agent.memory.write import MemoryWriter
 from agent.planning import (
     PlanStepStatus,
 )
 from agent.session import AgentSession
-from agent.state import AgentRunResult, AgentState
+from agent.state import AgentRunResult, AgentState, AgentStatus
 from policy.approval import (
     ApprovalHandler,
 )
@@ -93,6 +95,8 @@ class AgentRuntime:
         max_output_tokens: int,
         max_steps: int = 10,
         memory_retriever: (MemoryRetriever | None) = None,
+        memory_capture: MemoryCapture | None = None,
+        memory_writer: MemoryWriter | None = None,
     ) -> None:
         self._client = client
         self._model = model
@@ -108,6 +112,8 @@ class AgentRuntime:
         self._policy = policy
         self._approval = approval
         self._memory_retriever = memory_retriever
+        self._memory_capture = memory_capture
+        self._memory_writer = memory_writer
 
     @staticmethod
     def _protocol_error_outputs(
@@ -133,6 +139,33 @@ class AgentRuntime:
             )
 
         return outputs
+
+    def _capture_memories(
+        self,
+        *,
+        state: AgentState,
+        result: AgentRunResult,
+    ) -> None:
+        if self._memory_capture is None:
+            return
+
+        if self._memory_writer is None:
+            return
+
+        if result.output is None:
+            return
+
+        if result.status != AgentStatus.COMPLETED:
+            return
+
+        candidates = self._memory_capture.capture_completed_run(
+            task=state.task,
+            output=result.output,
+        )
+
+        for candidate in candidates:
+            write_result = self._memory_writer.write(candidate)
+            print(f"[memory write] decision={write_result.evaluation.decision.value}")
 
     def _start_next_plan_step_if_ready(
         self,
@@ -343,6 +376,10 @@ class AgentRuntime:
             state.fail()
             raise
 
+        self._capture_memories(
+            state=state,
+            result=result,
+        )
         if session is not None and result.output is not None:
             session.record_turn(
                 user_input=task,
