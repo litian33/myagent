@@ -43,10 +43,10 @@ P4.6 Error Boundary
 |---|---|---|---|
 | Phase 1 | LLM Application 基础 | ✅ 完成 | 不再深入 Provider / Tokenizer 细节 |
 | Phase 2 | Agent Loop | ✅ 完成 | 已形成真实 Tool Call → Observation → LLM 循环 |
-| Phase 3 | Tool Runtime | ✅ 基本完成 | 基础设施冻结，后续按需增加 Tool |
-| Phase 4 | Agent State + Runtime | 🟡 进行中 | P4.1～P4.4 已完成；当前进入 P4.5 |
-| Phase 5 | Planning | ⬜ 未开始 | **Phase 4 完成后立即进入** |
-| Phase 6 | Context + Memory | 🟡 部分提前完成 | Context 已有实践；Session / Long-term Memory 未开始 |
+| Phase 3 | Tool Runtime | ✅ 完成 | 已完成文件系统以及系统命令封装调用 |
+| Phase 4 | Agent State + Runtime | ✅ 完成 | 已完成单轮会话状态驱动 |
+| Phase 5 | Planning | ✅ 完成 | 已完成单轮会话状态内的任务规划以及驱动 |
+| Phase 6 | Context + Memory | 🟡 进行中 | 已经完成存储策略以及存储能力提高，未接入运行时 |
 | Phase 7 | RAG / Knowledge Retrieval | ⬜ 未开始 | — |
 | Phase 8 | Safety / Guardrails / HITL | 🟡 部分提前完成 | Policy / Approval / Sandbox 等已提前实现，当前冻结深入 |
 | Phase 9 | Observability + Evaluation | ⬜ 未开始 | — |
