@@ -214,14 +214,14 @@ P4.6 Error Boundary
 - [x] **P5.5 Progress Update**
 - [x] **P5.6 Replanning**
 - [x] **P5.7 Completion Criteria**
-- [ ] **P5.8 Phase 实验：完整修复任务**
+- [x] **P5.8 Phase 实验：完整修复任务**
 
 ### Phase 5 Exit Review
 
-- [ ] 能解释 ReAct 与 Plan-and-Execute 的差异
-- [ ] 能让 MyAgent 对一个多步骤任务维护显式 Plan 和 Progress
-- [ ] 能根据 Observation 调整计划
-- [ ] 能通过外部验证而不是模型自述判断任务完成
+- [x] 能解释 ReAct 与 Plan-and-Execute 的差异
+- [x] 能让 MyAgent 对一个多步骤任务维护显式 Plan 和 Progress
+- [x] 能根据 Observation 调整计划
+- [x] 能通过外部验证而不是模型自述判断任务完成
 
 ---
 
