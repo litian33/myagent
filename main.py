@@ -305,7 +305,7 @@ def main() -> None:
         policy=policy,
         approval=approval,
         max_output_tokens=max_output_tokens,
-        max_steps=20,
+        max_steps=50,
     )
 
     task = input("You: ").strip()
