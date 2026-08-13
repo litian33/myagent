@@ -46,8 +46,8 @@ P4.6 Error Boundary
 | Phase 3 | Tool Runtime | ✅ 完成 | 已完成文件系统以及系统命令封装调用 |
 | Phase 4 | Agent State + Runtime | ✅ 完成 | 已完成单轮会话状态驱动 |
 | Phase 5 | Planning | ✅ 完成 | 已完成单轮会话状态内的任务规划以及驱动 |
-| Phase 6 | Context + Memory | 🟡 进行中 | Store / Write Policy / Retrieval / Runtime 接线已完成；当前完成选择性 Memory Promotion / Capture |
-| Phase 7 | RAG / Knowledge Retrieval | ⬜ 未开始 | — |
+| Phase 6 | Context + Memory | ✅ 完成 | 已完成存储、策略、检索及运行时集成 |
+| Phase 7 | RAG / Knowledge Retrieval | 🟡 进行中 | — |
 | Phase 8 | Safety / Guardrails / HITL | 🟡 部分提前完成 | Policy / Approval / Sandbox 等已提前实现，当前冻结深入 |
 | Phase 9 | Observability + Evaluation | ⬜ 未开始 | — |
 | Phase 10 | Multi-Agent | ⬜ 未开始 | — |
@@ -251,35 +251,33 @@ P4.6 Error Boundary
   - [x] `AgentRuntime` 已接入 `MemoryCapture + MemoryWriter`
   - [x] 仅在 `COMPLETED` Run 后触发当前 Capture
   - [x] 当前实现能够生成 `EPISODIC + VERIFIED_OBSERVATION` Candidate
-  - [ ] 不再把每个成功 Run 的 task/output 整体复制成长期 Memory
-  - [ ] 引入 `MemoryProposal`，让模型只负责提出“什么可能值得记住”
-  - [ ] 第一版只自动提取用户明确、稳定、未来有复用价值的信息
-  - [ ] Runtime 根据当前真实 `user_input` 做 evidence grounding，并由 Runtime 绑定 `USER_EXPLICIT`
-  - [ ] 普通 Turn 应返回 0 个 Proposal / 不产生长期 Memory
-  - [ ] 暂不从任意 Tool Observation 自动晋升 Semantic / Procedural Memory
-- [ ] **P6.8 Automatic Restart 实验**
-  - [ ] Process A 通过真实 User Turn 自动 Promotion + Persist
-  - [ ] 退出进程
-  - [ ] Process B 自动 Retrieve + Project + Recall
-  - [ ] 不依赖人工 seed Memory
+  - [x] 不再把每个成功 Run 的 task/output 整体复制成长期 Memory
+  - [x] 引入 `MemoryProposal`，让模型只负责提出“什么可能值得记住”
+  - [x] 第一版只自动提取用户明确、稳定、未来有复用价值的信息
+  - [x] Runtime 根据当前真实 `user_input` 做 evidence grounding，并由 Runtime 绑定 `USER_EXPLICIT`
+  - [x] 普通 Turn 应返回 0 个 Proposal / 不产生长期 Memory
+  - [x] 暂不从任意 Tool Observation 自动晋升 Semantic / Procedural Memory
+- [x] **P6.8 Automatic Restart 实验**
+  - [x] Process A 通过真实 User Turn 自动 Promotion + Persist
+  - [x] 退出进程
+  - [x] Process B 自动 Retrieve + Project + Recall
+  - [x] 不依赖人工 seed Memory
 
 ### Phase 6 Exit Review
 
-- [ ] 能解释 Context ≠ History ≠ Compaction ≠ Session Memory ≠ Long-term Memory ≠ Knowledge Base
-- [ ] 能解释 Session-worthy ≠ Memory-worthy
-- [ ] 能解释 Memory Proposal / Candidate / Write Policy / MemoryRecord 的不同职责
-- [ ] Runtime 而不是 LLM 负责绑定可信 Memory Source / provenance
-- [ ] 大多数普通 Turn 不产生 Long-term Memory
-- [ ] Agent 能跨进程自动保存并召回少量长期事实
+- [x] 能解释 Context ≠ History ≠ Compaction ≠ Session Memory ≠ Long-term Memory ≠ Knowledge Base
+- [x] 能解释 Session-worthy ≠ Memory-worthy
+- [x] 能解释 Memory Proposal / Candidate / Write Policy / MemoryRecord 的不同职责
+- [x] Runtime 而不是 LLM 负责绑定可信 Memory Source / provenance
+- [x] 大多数普通 Turn 不产生 Long-term Memory
+- [x] Agent 能跨进程自动保存并召回少量长期事实
 
 ---
 
 # 9. Phase 7：RAG / Knowledge Retrieval
 
-**状态：未开始**
-
-- [ ] **P7.1 为什么需要 Retrieval**
-- [ ] **P7.2 Document → Chunk → Metadata**
+- [x] **P7.1 为什么需要 Retrieval**
+- [x] **P7.2 Document → Chunk → Metadata**
 - [ ] **P7.3 Embedding**
 - [ ] **P7.4 最小 Vector Retrieval**
 - [ ] **P7.5 Lexical Search / BM25**
