@@ -1,9 +1,5 @@
 import json
-from collections.abc import Callable
-from functools import wraps
-from typing import ParamSpec, TypeVar
 
-import openai
 from openai import OpenAI
 from openai.types.responses import (
     FunctionToolParam,
@@ -25,7 +21,6 @@ from agent.errors import (
     AgentExecutionError,
     AgentRunError,
     ContextExecutionError,
-    ModelInvocationError,
 )
 from agent.executor import PlanExecutor
 from agent.memory.capture import MemoryCapture, MemoryCaptureResult

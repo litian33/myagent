@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Protocol
 
 from openai import OpenAI
-from openai.types.responses import FunctionToolParam, ResponseFunctionToolCall
+from openai.types.responses import FunctionToolParam
 
 from agent.memory import MemoryKind
 from tools.base import handle_openai_errors
